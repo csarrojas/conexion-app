@@ -985,7 +985,7 @@ function Revelado() {
               CONE<span>XIÓN</span>
             </h1>
             <p className="rv-tagline rv-mono">
-              un lugar seguro para compartir. Publica, comenta y envía
+              Un lugar seguro para compartir. Publica, comenta y envía
               mensajes privados, con total seguridad.
             </p>
             <div className="rv-mode-tabs">
