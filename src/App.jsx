@@ -1124,7 +1124,7 @@ function Revelado() {
                     setActiveDmUser(null);
                   }}
                 >
-                  Rollo
+                  Sala
                 </button>
                 <button
                   className={`rv-tab ${view === "chat" ? "active" : ""}`}
@@ -1255,7 +1255,7 @@ function Revelado() {
 
                 {posts.length === 0 ? (
                   <div className="rv-empty">
-                    <div className="rv-display">EL ROLLO ESTÁ VACÍO</div>
+                    <div className="rv-display"> LA SALA ESTÁ VACÍO</div>
                     <p>Sé la primera persona en revelar una foto.</p>
                   </div>
                 ) : (
