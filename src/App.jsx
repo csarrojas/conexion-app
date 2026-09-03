@@ -575,6 +575,12 @@ function Revelado() {
   const [view, setView] = useState("feed");
 
   const [authMode, setAuthMode] = useState("signin"); // 'signin' | 'signup'
+  const [recoveryToken, setRecoveryToken] = useState(null);
+  const [newPasswordInput, setNewPasswordInput] = useState("");
+  const [resetLoading, setResetLoading] = useState(false);
+  const [resetMessage, setResetMessage] = useState("");
+  const [forgotLoading, setForgotLoading] = useState(false);
+  const [forgotMessage, setForgotMessage] = useState("");
   const [emailInput, setEmailInput] = useState("");
   const [passwordInput, setPasswordInput] = useState("");
   const [usernameInput, setUsernameInput] = useState("");
@@ -610,6 +616,71 @@ function Revelado() {
   const [adminActiveConvo, setAdminActiveConvo] = useState(null);
 
   const isAdmin = !!(profile && profile.is_admin);
+
+  // Detect a Supabase password-recovery link (#access_token=...&type=recovery)
+  useEffect(() => {
+    const hash = window.location.hash || "";
+    if (hash.includes("type=recovery")) {
+      const params = new URLSearchParams(hash.replace(/^#/, ""));
+      const token = params.get("access_token");
+      if (token) setRecoveryToken(token);
+    }
+  }, []);
+
+  async function handleForgotPassword() {
+    const email = emailInput.trim();
+    if (!email) {
+      setAuthError("Escribe tu correo arriba primero, y luego toca este enlace.");
+      return;
+    }
+    setForgotLoading(true);
+    setForgotMessage("");
+    setAuthError("");
+    try {
+      await fetch(`${SUPABASE_URL}/auth/v1/recover`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", apikey: SUPABASE_ANON_KEY },
+        body: JSON.stringify({ email }),
+      });
+      setForgotMessage("Listo, revisa tu correo (y la carpeta de spam) para el enlace.");
+    } catch (err) {
+      setForgotMessage("No se pudo enviar el correo. Intenta de nuevo.");
+    } finally {
+      setForgotLoading(false);
+    }
+  }
+
+  async function handleCompletePasswordReset() {
+    if (newPasswordInput.length < 6) {
+      setResetMessage("La contraseña debe tener al menos 6 caracteres.");
+      return;
+    }
+    setResetLoading(true);
+    setResetMessage("");
+    try {
+      const res = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          apikey: SUPABASE_ANON_KEY,
+          Authorization: `Bearer ${recoveryToken}`,
+        },
+        body: JSON.stringify({ password: newPasswordInput }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.msg || "El enlace venció o no es válido. Pide uno nuevo.");
+      setResetMessage("¡Contraseña actualizada! Ya puedes iniciar sesión con ella.");
+      setRecoveryToken(null);
+      setNewPasswordInput("");
+      window.location.hash = "";
+      setAuthMode("signin");
+    } catch (err) {
+      setResetMessage(err.message);
+    } finally {
+      setResetLoading(false);
+    }
+  }
+
 
   // ---- Loading feed + members ----
   const loadFeed = useCallback(async (token) => {
@@ -978,7 +1049,40 @@ function Revelado() {
     <div className="rv-root">
       <style>{STYLES}</style>
 
-      {!session || !profile ? (
+      {recoveryToken ? (
+        <div className="rv-auth-wrap">
+          <div className="rv-auth-card">
+            <h1 className="rv-logo rv-display">
+              CONE<span>XIÓN</span>
+            </h1>
+            <p className="rv-tagline rv-mono">Elige tu nueva contraseña</p>
+            <div>
+              <label className="rv-field-label">Nueva contraseña</label>
+              <input
+                className="rv-input"
+                type="password"
+                placeholder="mínimo 6 caracteres"
+                value={newPasswordInput}
+                onChange={(e) => setNewPasswordInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") handleCompletePasswordReset();
+                }}
+                disabled={resetLoading}
+                autoFocus
+              />
+              {resetMessage && <div className="rv-error">{resetMessage}</div>}
+              <button
+                className="rv-btn"
+                type="button"
+                onClick={handleCompletePasswordReset}
+                disabled={resetLoading}
+              >
+                {resetLoading ? "GUARDANDO..." : "GUARDAR CONTRASEÑA"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : !session || !profile ? (
         <div className="rv-auth-wrap">
           <div className="rv-auth-card">
             <h1 className="rv-logo rv-display">
@@ -1033,6 +1137,24 @@ function Revelado() {
                 }}
                 disabled={authLoading}
               />
+              {authMode === "signin" && (
+                <div style={{ marginTop: 8, textAlign: "right" }}>
+                  <button
+                    type="button"
+                    className="rv-comment-toggle"
+                    style={{ padding: 0 }}
+                    onClick={handleForgotPassword}
+                    disabled={forgotLoading}
+                  >
+                    {forgotLoading ? "enviando..." : "¿Olvidaste tu contraseña?"}
+                  </button>
+                  {forgotMessage && (
+                    <div style={{ fontSize: 11, color: "var(--ink-soft)", marginTop: 4 }}>
+                      {forgotMessage}
+                    </div>
+                  )}
+                </div>
+              )}
               {authMode === "signup" && (
                 <>
                   <label className="rv-field-label" style={{ marginTop: 14 }}>
