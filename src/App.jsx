@@ -1255,7 +1255,7 @@ function Revelado() {
 
                 {posts.length === 0 ? (
                   <div className="rv-empty">
-                    <div className="rv-display"> LA SALA ESTÁ VACÍO</div>
+                    <div className="rv-display">LA SALA ESTÁ VACÍA</div>
                     <p>Sé la primera persona en revelar una foto.</p>
                   </div>
                 ) : (
