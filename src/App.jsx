@@ -609,11 +609,19 @@ function Revelado() {
   const [dmDraft, setDmDraft] = useState("");
   const [dmImagePreview, setDmImagePreview] = useState(null);
   const [dmImageBlob, setDmImageBlob] = useState(null);
-  const [lastRead, setLastRead] = useState({});
   const chatLogRef = useRef(null);
   const dmFileInputRef = useRef(null);
 
   const [adminActiveConvo, setAdminActiveConvo] = useState(null);
+
+  const [products, setProducts] = useState([]);
+  const [productName, setProductName] = useState("");
+  const [productDescription, setProductDescription] = useState("");
+  const [productPrice, setProductPrice] = useState("");
+  const [productImagePreview, setProductImagePreview] = useState(null);
+  const [productImageBlob, setProductImageBlob] = useState(null);
+  const [publishingProduct, setPublishingProduct] = useState(false);
+  const productFileInputRef = useRef(null);
 
   const isAdmin = !!(profile && profile.is_admin);
 
@@ -725,11 +733,20 @@ function Revelado() {
     }
   }, []);
 
+  const loadProducts = useCallback(async (token) => {
+    try {
+      const data = await sbRest("products?select=*&order=created_at.desc", { token });
+      setProducts(data || []);
+    } catch (e) {
+      console.error("loadProducts", e);
+    }
+  }, []);
+
   const loadAll = useCallback(
     async (token, myId) => {
-      await Promise.all([loadFeed(token), loadUsers(token), loadDms(token, myId)]);
+      await Promise.all([loadFeed(token), loadUsers(token), loadDms(token, myId), loadProducts(token)]);
     },
-    [loadFeed, loadUsers, loadDms]
+    [loadFeed, loadUsers, loadDms, loadProducts]
   );
 
   useEffect(() => {
@@ -753,22 +770,35 @@ function Revelado() {
     if (!profile) return 0;
     const key = dmKey(profile.username, otherUsername);
     const msgs = dms[key] || [];
-    const readTs = lastRead[key] || 0;
-    return msgs.filter((m) => m.sender.username !== profile.username && new Date(m.created_at).getTime() > readTs)
-      .length;
+    return msgs.filter((m) => m.receiver.username === profile.username && !m.read_at).length;
   }
   const usersWithNewMessages = profile
     ? users.filter((u) => u.username !== profile.username).filter((u) => unreadCountWith(u.username) > 0)
     : [];
   const totalUnread = usersWithNewMessages.reduce((sum, u) => sum + unreadCountWith(u.username), 0);
 
+  // Persist "read" status in the database (not just local state) so it
+  // doesn't reset every time the page reloads or you log in again.
   useEffect(() => {
-    if (!profile || !activeDmUser || view !== "chat") return;
+    if (!profile || !activeDmUser || view !== "chat" || !session) return;
     const key = dmKey(profile.username, activeDmUser);
-    const msgs = dms[key] || [];
-    const latestTs = msgs.length ? new Date(msgs[msgs.length - 1].created_at).getTime() : Date.now();
-    setLastRead((prev) => (prev[key] >= latestTs ? prev : { ...prev, [key]: latestTs }));
-  }, [dms, activeDmUser, profile, view]);
+    const unreadMsgs = (dms[key] || []).filter((m) => m.receiver.username === profile.username && !m.read_at);
+    if (unreadMsgs.length === 0) return;
+    const otherUser = users.find((u) => u.username === activeDmUser);
+    if (!otherUser) return;
+    (async () => {
+      try {
+        await sbRest(`messages?sender_id=eq.${otherUser.id}&receiver_id=eq.${profile.id}&read_at=is.null`, {
+          method: "PATCH",
+          token: session.accessToken,
+          body: { read_at: new Date().toISOString() },
+        });
+        await loadDms(session.accessToken, profile.id);
+      } catch (err) {
+        console.error("mark as read failed", err);
+      }
+    })();
+  }, [dms, activeDmUser, profile, view, session, users, loadDms]);
 
   // ---- Auth ----
   async function handleAuth() {
@@ -844,7 +874,6 @@ function Revelado() {
         setSession({ accessToken, userId, email });
         setProfile(myProfile);
       }
-      setLastRead({});
       setActiveDmUser(null);
     } catch (err) {
       console.error("Revelado handleAuth error:", err);
@@ -859,7 +888,6 @@ function Revelado() {
     setProfile(null);
     setPasswordInput("");
     setActiveDmUser(null);
-    setLastRead({});
     setPosts([]);
     setUsers([]);
     setDms({});
@@ -1000,6 +1028,65 @@ function Revelado() {
     }
   }
 
+  // ---- Tienda ----
+  async function handleProductFilePick(e) {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    try {
+      const blob = await compressImageToBlob(file, 900, 0.75);
+      setProductImagePreview(URL.createObjectURL(blob));
+      setProductImageBlob(blob);
+    } catch (err) {
+      setProductImagePreview(null);
+      setProductImageBlob(null);
+    }
+  }
+
+  async function handlePublishProduct() {
+    if (!isAdmin || !session || !productName.trim() || publishingProduct) return;
+    setPublishingProduct(true);
+    try {
+      let imageUrl = null;
+      if (productImageBlob) {
+        imageUrl = await sbUpload(productImageBlob, session.accessToken, "products");
+      }
+      await sbRest("products", {
+        method: "POST",
+        token: session.accessToken,
+        body: {
+          name: productName.trim(),
+          description: productDescription.trim(),
+          price: productPrice.trim() || null,
+          image_url: imageUrl,
+          created_by: profile.id,
+        },
+      });
+      setProductName("");
+      setProductDescription("");
+      setProductPrice("");
+      setProductImagePreview(null);
+      setProductImageBlob(null);
+      if (productFileInputRef.current) productFileInputRef.current.value = "";
+      await loadProducts(session.accessToken);
+    } catch (err) {
+      console.error(err);
+      alert("No se pudo agregar el producto: " + err.message);
+    } finally {
+      setPublishingProduct(false);
+    }
+  }
+
+  async function handleDeleteProduct(productId) {
+    if (!isAdmin || !session) return;
+    setProducts((prev) => prev.filter((p) => p.id !== productId));
+    try {
+      await sbRest(`products?id=eq.${productId}`, { method: "DELETE", token: session.accessToken });
+    } catch (err) {
+      console.error(err);
+      await loadProducts(session.accessToken);
+    }
+  }
+
   // ---- DMs ----
   async function handleDmFilePick(e) {
     const file = e.target.files && e.target.files[0];
@@ -1035,8 +1122,6 @@ function Revelado() {
         token: session.accessToken,
         body: { sender_id: profile.id, receiver_id: otherUser.id, text, image_url: imageUrl },
       });
-      const key = dmKey(profile.username, activeDmUser);
-      setLastRead((prev) => ({ ...prev, [key]: Date.now() }));
       await loadDms(session.accessToken, profile.id);
     } catch (err) {
       console.error(err);
@@ -1090,7 +1175,7 @@ function Revelado() {
             </h1>
             <p className="rv-tagline rv-mono">
               Un lugar seguro para compartir. Publica, comenta y envía
-              mensajes privados con total seguridad.
+              mensajes privados, con total seguridad.
             </p>
             <div className="rv-mode-tabs">
               <button
@@ -1281,6 +1366,15 @@ function Revelado() {
                   }}
                 >
                   Miembros
+                </button>
+                <button
+                  className={`rv-tab ${view === "store" ? "active" : ""}`}
+                  onClick={() => {
+                    setView("store");
+                    setActiveDmUser(null);
+                  }}
+                >
+                  Tienda
                 </button>
                 {isAdmin && (
                   <button
@@ -1875,6 +1969,143 @@ function Revelado() {
                   </div>
                 );
               })()}
+
+            {view === "store" && (
+              <div>
+                {isAdmin && (
+                  <div className="rv-upload-box">
+                    <div className="rv-upload-row">
+                      <div className="rv-upload-preview">
+                        {productImagePreview ? (
+                          <img src={productImagePreview} alt="preview" />
+                        ) : (
+                          <span>+</span>
+                        )}
+                        <input
+                          type="file"
+                          accept="image/*"
+                          ref={productFileInputRef}
+                          onChange={handleProductFilePick}
+                          style={{
+                            position: "absolute",
+                            inset: 0,
+                            width: "100%",
+                            height: "100%",
+                            opacity: 0,
+                            cursor: "pointer",
+                          }}
+                        />
+                      </div>
+                      <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 8 }}>
+                        <input
+                          className="rv-input"
+                          placeholder="Nombre del producto"
+                          value={productName}
+                          onChange={(e) => setProductName(e.target.value)}
+                        />
+                        <input
+                          className="rv-input"
+                          placeholder="Precio (opcional)"
+                          value={productPrice}
+                          onChange={(e) => setProductPrice(e.target.value)}
+                        />
+                      </div>
+                    </div>
+                    <textarea
+                      className="rv-caption-input"
+                      style={{ width: "100%", marginTop: 10, minHeight: 60 }}
+                      placeholder="Características del producto..."
+                      value={productDescription}
+                      onChange={(e) => setProductDescription(e.target.value)}
+                    />
+                    <div className="rv-upload-actions">
+                      <button
+                        className="rv-btn"
+                        disabled={!productName.trim() || publishingProduct}
+                        onClick={handlePublishProduct}
+                      >
+                        {publishingProduct ? "AGREGANDO..." : "AGREGAR PRODUCTO"}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {products.length === 0 ? (
+                  <div className="rv-empty">
+                    <div className="rv-display">LA TIENDA ESTÁ VACÍA</div>
+                    <p>
+                      {isAdmin
+                        ? "Agrega el primer producto arriba."
+                        : "Todavía no hay productos publicados."}
+                    </p>
+                  </div>
+                ) : (
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "1fr 1fr",
+                      gap: 14,
+                    }}
+                  >
+                    {products.map((p) => (
+                      <div
+                        key={p.id}
+                        style={{
+                          background: "var(--surface)",
+                          border: "1px solid var(--line)",
+                          borderRadius: 4,
+                          overflow: "hidden",
+                          display: "flex",
+                          flexDirection: "column",
+                        }}
+                      >
+                        <div
+                          style={{
+                            aspectRatio: "1 / 1",
+                            background: "var(--paper)",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                          }}
+                        >
+                          {p.image_url ? (
+                            <img
+                              src={p.image_url}
+                              alt={p.name}
+                              style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                            />
+                          ) : (
+                            <span style={{ color: "var(--ink-soft)", fontSize: 12 }}>sin imagen</span>
+                          )}
+                        </div>
+                        <div style={{ padding: 10, display: "flex", flexDirection: "column", gap: 4, flex: 1 }}>
+                          <div style={{ fontWeight: 600, fontSize: 13 }}>{p.name}</div>
+                          {p.price && (
+                            <div className="rv-mono" style={{ color: "var(--flash)", fontSize: 13 }}>
+                              {p.price}
+                            </div>
+                          )}
+                          {p.description && (
+                            <div style={{ fontSize: 12, color: "var(--ink-soft)", flex: 1 }}>
+                              {p.description}
+                            </div>
+                          )}
+                          {isAdmin && (
+                            <button
+                              className="rv-comment-toggle"
+                              style={{ color: "var(--accent)", alignSelf: "flex-start", padding: "4px 0" }}
+                              onClick={() => handleDeleteProduct(p.id)}
+                            >
+                              borrar
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
 
             {view === "admin" && isAdmin && (
               <div>
