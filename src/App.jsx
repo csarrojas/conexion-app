@@ -587,6 +587,8 @@ function Revelado() {
   const [codeInput, setCodeInput] = useState("");
   const [signupAvatarPreview, setSignupAvatarPreview] = useState(null);
   const [signupAvatarBlob, setSignupAvatarBlob] = useState(null);
+  const [signupSelfiePreview, setSignupSelfiePreview] = useState(null);
+  const [signupSelfieBlob, setSignupSelfieBlob] = useState(null);
   const [authError, setAuthError] = useState("");
   const [authLoading, setAuthLoading] = useState(false);
 
@@ -594,6 +596,14 @@ function Revelado() {
   const [profileReturnView, setProfileReturnView] = useState("feed");
   const [avatarUploading, setAvatarUploading] = useState(false);
   const avatarEditInputRef = useRef(null);
+
+  const [lightboxUrl, setLightboxUrl] = useState(null);
+
+  const [verifications, setVerifications] = useState([]);
+  const [adminPanel, setAdminPanel] = useState("conversations"); // 'conversations' | 'verification'
+  const [myVerification, setMyVerification] = useState(null);
+  const [selfVerifyLoading, setSelfVerifyLoading] = useState(false);
+  const selfVerifyInputRef = useRef(null);
 
   const [uploadPreview, setUploadPreview] = useState(null);
   const [uploadBlob, setUploadBlob] = useState(null);
@@ -694,7 +704,7 @@ function Revelado() {
   const loadFeed = useCallback(async (token) => {
     try {
       const data = await sbRest(
-        "posts?select=*,author:profiles(username,avatar_url),comments(id,text,created_at,author:profiles(username))&order=created_at.desc",
+        "posts?select=*,author:profiles(username,avatar_url,verified),comments(id,text,created_at,author:profiles(username))&order=created_at.desc",
         { token }
       );
       setPosts(data || []);
@@ -706,10 +716,15 @@ function Revelado() {
   const loadUsers = useCallback(async (token) => {
     try {
       const data = await sbRest(
-        "profiles?select=id,username,is_admin,banned,created_at,avatar_url&banned=eq.false&order=created_at.asc",
+        "profiles?select=id,username,is_admin,banned,created_at,avatar_url,verified&banned=eq.false&order=created_at.asc",
         { token }
       );
       setUsers(data || []);
+      setProfile((prev) => {
+        if (!prev) return prev;
+        const mine = (data || []).find((u) => u.id === prev.id);
+        return mine && mine.verified !== prev.verified ? { ...prev, verified: mine.verified } : prev;
+      });
     } catch (e) {
       console.error("loadUsers", e);
     }
@@ -742,11 +757,40 @@ function Revelado() {
     }
   }, []);
 
+  const loadVerifications = useCallback(async (token) => {
+    try {
+      const data = await sbRest(
+        "verifications?select=*,profile:profiles!verifications_user_id_fkey(username,avatar_url,banned)&order=created_at.desc",
+        { token }
+      );
+      setVerifications(data || []);
+    } catch (e) {
+      console.error("loadVerifications", e);
+    }
+  }, []);
+
+  const loadMyVerification = useCallback(async (token, myId) => {
+    try {
+      const data = await sbRest(`verifications?user_id=eq.${myId}&select=verified,photo_url`, { token });
+      setMyVerification(data && data[0] ? data[0] : false);
+    } catch (e) {
+      console.error("loadMyVerification", e);
+    }
+  }, []);
+
   const loadAll = useCallback(
-    async (token, myId) => {
-      await Promise.all([loadFeed(token), loadUsers(token), loadDms(token, myId), loadProducts(token)]);
+    async (token, myId, admin) => {
+      const calls = [
+        loadFeed(token),
+        loadUsers(token),
+        loadDms(token, myId),
+        loadProducts(token),
+        loadMyVerification(token, myId),
+      ];
+      if (admin) calls.push(loadVerifications(token));
+      await Promise.all(calls);
     },
-    [loadFeed, loadUsers, loadDms, loadProducts]
+    [loadFeed, loadUsers, loadDms, loadProducts, loadVerifications, loadMyVerification]
   );
 
   useEffect(() => {
@@ -755,8 +799,8 @@ function Revelado() {
 
   useEffect(() => {
     if (!session || !profile) return;
-    loadAll(session.accessToken, profile.id);
-    const id = setInterval(() => loadAll(session.accessToken, profile.id), 5000);
+    loadAll(session.accessToken, profile.id, profile.is_admin);
+    const id = setInterval(() => loadAll(session.accessToken, profile.id, profile.is_admin), 5000);
     return () => clearInterval(id);
   }, [session, profile, loadAll]);
 
@@ -828,6 +872,10 @@ function Revelado() {
         setAuthError("Código de acceso incorrecto.");
         return;
       }
+      if (!signupSelfieBlob) {
+        setAuthError("Toma una foto de verificación (selfie) para poder registrarte.");
+        return;
+      }
     }
 
     setAuthError("");
@@ -854,6 +902,16 @@ function Revelado() {
           token: accessToken,
           body: { id: userId, username, avatar_url: avatarUrl },
         });
+        try {
+          const selfieUrl = await sbUpload(signupSelfieBlob, accessToken, "verifications");
+          await sbRest("verifications", {
+            method: "POST",
+            token: accessToken,
+            body: { user_id: userId, photo_url: selfieUrl },
+          });
+        } catch (selfieErr) {
+          console.error("selfie upload failed", selfieErr);
+        }
         setSession({ accessToken, userId, email });
         setProfile(Array.isArray(newProfile) ? newProfile[0] : newProfile);
       } else {
@@ -907,6 +965,19 @@ function Revelado() {
     } catch (err) {
       setSignupAvatarPreview(null);
       setSignupAvatarBlob(null);
+    }
+  }
+
+  async function handleSignupSelfiePick(e) {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    try {
+      const blob = await compressImageToBlob(file, 700, 0.75);
+      setSignupSelfiePreview(URL.createObjectURL(blob));
+      setSignupSelfieBlob(blob);
+    } catch (err) {
+      setSignupSelfiePreview(null);
+      setSignupSelfieBlob(null);
     }
   }
 
@@ -1084,6 +1155,68 @@ function Revelado() {
     } catch (err) {
       console.error(err);
       await loadProducts(session.accessToken);
+    }
+  }
+
+  async function handleToggleVerified(userId, currentlyVerified) {
+    if (!isAdmin || !session) return;
+    const next = !currentlyVerified;
+    setVerifications((prev) => prev.map((v) => (v.user_id === userId ? { ...v, verified: next } : v)));
+    setUsers((prev) => prev.map((u) => (u.id === userId ? { ...u, verified: next } : u)));
+    try {
+      await Promise.all([
+        sbRest(`verifications?user_id=eq.${userId}`, {
+          method: "PATCH",
+          token: session.accessToken,
+          body: { verified: next },
+        }),
+        sbRest(`profiles?id=eq.${userId}`, {
+          method: "PATCH",
+          token: session.accessToken,
+          body: { verified: next },
+        }),
+      ]);
+    } catch (err) {
+      console.error(err);
+      await loadVerifications(session.accessToken);
+      await loadUsers(session.accessToken);
+    }
+  }
+
+  async function handleSelfVerifyPick(e) {
+    const file = e.target.files && e.target.files[0];
+    if (!file || !session) return;
+    setSelfVerifyLoading(true);
+    try {
+      const blob = await compressImageToBlob(file, 700, 0.75);
+      const photoUrl = await sbUpload(blob, session.accessToken, "verifications");
+      if (myVerification) {
+        // Resubmitting — reset to pending so the admin reviews the new photo.
+        await sbRest(`verifications?user_id=eq.${profile.id}`, {
+          method: "PATCH",
+          token: session.accessToken,
+          body: { photo_url: photoUrl, verified: false },
+        });
+        await sbRest(`profiles?id=eq.${profile.id}`, {
+          method: "PATCH",
+          token: session.accessToken,
+          body: { verified: false },
+        });
+      } else {
+        await sbRest("verifications", {
+          method: "POST",
+          token: session.accessToken,
+          body: { user_id: profile.id, photo_url: photoUrl },
+        });
+      }
+      setProfile((p) => ({ ...p, verified: false }));
+      await loadMyVerification(session.accessToken, profile.id);
+    } catch (err) {
+      console.error(err);
+      alert("No se pudo enviar la foto de verificación.");
+    } finally {
+      setSelfVerifyLoading(false);
+      if (selfVerifyInputRef.current) selfVerifyInputRef.current.value = "";
     }
   }
 
@@ -1281,6 +1414,57 @@ function Revelado() {
                     <span style={{ fontSize: 11, color: "var(--ink-soft)" }}>
                       Toca el círculo para elegir una foto. Puedes agregarla
                       después si prefieres.
+                    </span>
+                  </div>
+                  <label className="rv-field-label" style={{ marginTop: 14 }}>
+                    Foto de verificación (selfie) — obligatoria
+                  </label>
+                  <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                    <div
+                      style={{
+                        position: "relative",
+                        width: 52,
+                        height: 52,
+                        borderRadius: "50%",
+                        background: "var(--bg)",
+                        border: "1px solid var(--line)",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        overflow: "hidden",
+                        flexShrink: 0,
+                      }}
+                    >
+                      {signupSelfiePreview ? (
+                        <img
+                          src={signupSelfiePreview}
+                          alt="selfie"
+                          style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                        />
+                      ) : (
+                        <span style={{ fontSize: 20 }}>📷</span>
+                      )}
+                      <input
+                        type="file"
+                        accept="image/*"
+                        capture="user"
+                        onChange={handleSignupSelfiePick}
+                        disabled={authLoading}
+                        style={{
+                          position: "absolute",
+                          inset: 0,
+                          width: "100%",
+                          height: "100%",
+                          opacity: 0,
+                          cursor: "pointer",
+                          borderRadius: "50%",
+                        }}
+                      />
+                    </div>
+                    <span style={{ fontSize: 11, color: "var(--ink-soft)" }}>
+                      Toca el ícono 📷 para abrir la cámara y tomarte una foto
+                      — sirve para que el administrador confirme que la
+                      cuenta es real. Solo la ve el administrador.
                     </span>
                   </div>
                   <label className="rv-field-label" style={{ marginTop: 14 }}>
@@ -1495,6 +1679,11 @@ function Revelado() {
                             >
                               <AvatarCircle username={post.author.username} avatarUrl={post.author.avatar_url} size={22} />
                               <span className="rv-frame-username">{post.author.username}</span>
+                              {post.author.verified && (
+                                <span title="Cuenta verificada" style={{ marginLeft: 4, fontSize: 12 }}>
+                                  ✅
+                                </span>
+                              )}
                             </div>
                             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                               <span className="rv-frame-number rv-mono">FRAME {frameNum}</span>
@@ -1511,7 +1700,13 @@ function Revelado() {
                             </div>
                           </div>
                           <div className="rv-frame-img-wrap">
-                            <img className="rv-frame-img" src={post.image_url} alt={post.caption || "foto"} />
+                            <img
+                              className="rv-frame-img"
+                              src={post.image_url}
+                              alt={post.caption || "foto"}
+                              style={{ cursor: "pointer" }}
+                              onClick={() => setLightboxUrl(post.image_url)}
+                            />
                             {post.caption && <div className="rv-frame-caption">{post.caption}</div>}
                           </div>
                           <div className="rv-frame-meta">
@@ -1788,6 +1983,11 @@ function Revelado() {
                         <div>
                           <div className="rv-member-name">
                             {u.username}
+                            {u.verified && (
+                              <span title="Cuenta verificada" style={{ marginLeft: 6, fontSize: 12 }}>
+                                ✅
+                              </span>
+                            )}
                             {u.is_admin && (
                               <span
                                 className="rv-mono"
@@ -1861,6 +2061,7 @@ function Revelado() {
                           username={person.username}
                           avatarUrl={person.avatar_url}
                           size={72}
+                          onClick={!isOwn && person.avatar_url ? () => setLightboxUrl(person.avatar_url) : undefined}
                         />
                         {isOwn && (
                           <>
@@ -1904,6 +2105,14 @@ function Revelado() {
                       <div>
                         <div className="rv-display" style={{ fontSize: 24 }}>
                           {person.username}
+                          {person.verified && (
+                            <span
+                              title="Cuenta verificada"
+                              style={{ marginLeft: 8, fontSize: 16, verticalAlign: "middle" }}
+                            >
+                              ✅
+                            </span>
+                          )}
                           {person.is_admin && (
                             <span
                               className="rv-mono"
@@ -1929,6 +2138,39 @@ function Revelado() {
                         {isOwn && (
                           <div style={{ fontSize: 11, color: "var(--ink-soft)", marginTop: 4 }}>
                             Toca tu foto para cambiarla
+                          </div>
+                        )}
+                        {isOwn && (
+                          <div style={{ marginTop: 8 }}>
+                            {person.verified ? (
+                              <span style={{ fontSize: 12, color: "var(--ink-soft)" }}>
+                                ✅ Tu cuenta está verificada
+                              </span>
+                            ) : (
+                              <>
+                                <input
+                                  type="file"
+                                  accept="image/*"
+                                  capture="user"
+                                  ref={selfVerifyInputRef}
+                                  onChange={handleSelfVerifyPick}
+                                  disabled={selfVerifyLoading}
+                                  style={{ display: "none" }}
+                                  id="self-verify-input"
+                                />
+                                <label
+                                  htmlFor="self-verify-input"
+                                  className="rv-comment-toggle"
+                                  style={{ padding: 0, cursor: "pointer" }}
+                                >
+                                  {selfVerifyLoading
+                                    ? "enviando..."
+                                    : myVerification
+                                    ? "📷 Selfie enviada, pendiente de revisión — tocar para reenviar"
+                                    : "📷 Verificarme (tomar selfie)"}
+                                </label>
+                              </>
+                            )}
                           </div>
                         )}
                       </div>
@@ -1960,7 +2202,8 @@ function Revelado() {
                             <img
                               src={p.image_url}
                               alt={p.caption || "foto"}
-                              style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+                              style={{ width: "100%", height: "100%", objectFit: "cover", display: "block", cursor: "pointer" }}
+                              onClick={() => setLightboxUrl(p.image_url)}
                             />
                           </div>
                         ))}
@@ -2109,7 +2352,98 @@ function Revelado() {
 
             {view === "admin" && isAdmin && (
               <div>
-                <div className="rv-section-title">Conversaciones supervisadas</div>
+                <div className="rv-section-title" style={{ display: "flex", gap: 16 }}>
+                  <span
+                    style={{
+                      cursor: "pointer",
+                      color: adminPanel === "conversations" ? "var(--flash)" : "var(--ink-soft)",
+                    }}
+                    onClick={() => setAdminPanel("conversations")}
+                  >
+                    Conversaciones
+                  </span>
+                  <span
+                    style={{
+                      cursor: "pointer",
+                      color: adminPanel === "verification" ? "var(--flash)" : "var(--ink-soft)",
+                    }}
+                    onClick={() => setAdminPanel("verification")}
+                  >
+                    Verificación
+                    {verifications.filter((v) => !v.verified).length > 0 && (
+                      <span
+                        className="rv-mono"
+                        style={{
+                          marginLeft: 6,
+                          background: "var(--accent)",
+                          color: "#fff",
+                          fontSize: 10,
+                          padding: "1px 6px",
+                          borderRadius: 10,
+                        }}
+                      >
+                        {verifications.filter((v) => !v.verified).length}
+                      </span>
+                    )}
+                  </span>
+                </div>
+
+                {adminPanel === "verification" ? (
+                  verifications.length === 0 ? (
+                    <div className="rv-empty" style={{ padding: "30px 0" }}>
+                      Todavía no hay selfies de verificación para revisar.
+                    </div>
+                  ) : (
+                    verifications.map((v) => (
+                      <div
+                        className="rv-member-row"
+                        key={v.user_id}
+                        style={{ alignItems: "flex-start" }}
+                      >
+                        <img
+                          src={v.photo_url}
+                          alt={`selfie de ${v.profile ? v.profile.username : ""}`}
+                          style={{
+                            width: 64,
+                            height: 64,
+                            borderRadius: 4,
+                            objectFit: "cover",
+                            cursor: "pointer",
+                            flexShrink: 0,
+                          }}
+                          onClick={() => setLightboxUrl(v.photo_url)}
+                        />
+                        <div style={{ flex: 1 }}>
+                          <div className="rv-member-name">
+                            {v.profile ? v.profile.username : "(usuario eliminado)"}
+                          </div>
+                          <div className="rv-member-joined">
+                            {v.verified ? "✅ Verificado" : "⏳ Pendiente de revisión"} ·{" "}
+                            {timeAgo(v.created_at)}
+                          </div>
+                        </div>
+                        <div style={{ display: "flex", gap: 8 }}>
+                          <button
+                            className="rv-send-mini"
+                            onClick={() => handleToggleVerified(v.user_id, v.verified)}
+                          >
+                            {v.verified ? "quitar verificación" : "marcar verificado"}
+                          </button>
+                          {v.profile && !v.profile.banned && (
+                            <button
+                              className="rv-send-mini"
+                              style={{ color: "var(--accent)", borderColor: "var(--accent-soft)" }}
+                              onClick={() => handleBanUser(v.user_id, v.profile.username)}
+                            >
+                              expulsar
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ))
+                  )
+                ) : (
+                <>
                 {!adminActiveConvo ? (
                   Object.keys(dms).length === 0 ? (
                     <div className="rv-empty" style={{ padding: "30px 0" }}>
@@ -2202,9 +2536,61 @@ function Revelado() {
                     </p>
                   </>
                 )}
+                </>
+                )}
               </div>
             )}
           </div>
+        </div>
+      )}
+
+      {lightboxUrl && (
+        <div
+          onClick={() => setLightboxUrl(null)}
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(10,11,14,0.92)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1000,
+            cursor: "zoom-out",
+            padding: 20,
+          }}
+        >
+          <img
+            src={lightboxUrl}
+            alt="vista completa"
+            style={{
+              maxWidth: "100%",
+              maxHeight: "100%",
+              objectFit: "contain",
+              borderRadius: 4,
+              boxShadow: "0 10px 40px rgba(0,0,0,0.5)",
+            }}
+          />
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setLightboxUrl(null);
+            }}
+            style={{
+              position: "absolute",
+              top: 18,
+              right: 18,
+              background: "rgba(255,255,255,0.1)",
+              border: "1px solid rgba(255,255,255,0.3)",
+              color: "#fff",
+              width: 36,
+              height: 36,
+              borderRadius: "50%",
+              fontSize: 18,
+              cursor: "pointer",
+            }}
+          >
+            ✕
+          </button>
         </div>
       )}
     </div>
