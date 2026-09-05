@@ -117,6 +117,22 @@ ${FONT_IMPORT}
   transition: border-color 0.15s ease;
 }
 .rv-input:focus { border-color: var(--accent); }
+.rv-password-wrap { position: relative; }
+.rv-password-wrap .rv-input { padding-right: 42px; }
+.rv-password-toggle {
+  position: absolute;
+  top: 50%;
+  right: 4px;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  color: var(--ink-soft);
+  font-size: 16px;
+  padding: 6px 8px;
+  cursor: pointer;
+  line-height: 1;
+}
+.rv-password-toggle:hover { color: var(--ink); }
 .rv-btn {
   width: 100%;
   margin-top: 18px;
@@ -583,6 +599,8 @@ function Revelado() {
   const [forgotMessage, setForgotMessage] = useState("");
   const [emailInput, setEmailInput] = useState("");
   const [passwordInput, setPasswordInput] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
   const [usernameInput, setUsernameInput] = useState("");
   const [codeInput, setCodeInput] = useState("");
   const [signupAvatarPreview, setSignupAvatarPreview] = useState(null);
@@ -1276,18 +1294,29 @@ function Revelado() {
             <p className="rv-tagline rv-mono">Elige tu nueva contraseña</p>
             <div>
               <label className="rv-field-label">Nueva contraseña</label>
-              <input
-                className="rv-input"
-                type="password"
-                placeholder="mínimo 6 caracteres"
-                value={newPasswordInput}
-                onChange={(e) => setNewPasswordInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") handleCompletePasswordReset();
-                }}
-                disabled={resetLoading}
-                autoFocus
-              />
+              <div className="rv-password-wrap">
+                <input
+                  className="rv-input"
+                  type={showNewPassword ? "text" : "password"}
+                  placeholder="mínimo 6 caracteres"
+                  value={newPasswordInput}
+                  onChange={(e) => setNewPasswordInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") handleCompletePasswordReset();
+                  }}
+                  disabled={resetLoading}
+                  autoFocus
+                />
+                <button
+                  type="button"
+                  className="rv-password-toggle"
+                  onClick={() => setShowNewPassword((v) => !v)}
+                  tabIndex={-1}
+                  title={showNewPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+                >
+                  {showNewPassword ? "🙈" : "👁"}
+                </button>
+              </div>
               {resetMessage && <div className="rv-error">{resetMessage}</div>}
               <button
                 className="rv-btn"
@@ -1344,17 +1373,28 @@ function Revelado() {
               <label className="rv-field-label" style={{ marginTop: 14 }}>
                 Contraseña
               </label>
-              <input
-                className="rv-input"
-                type="password"
-                placeholder={authMode === "signup" ? "mínimo 6 caracteres" : "tu contraseña"}
-                value={passwordInput}
-                onChange={(e) => setPasswordInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && authMode === "signin") handleAuth();
-                }}
-                disabled={authLoading}
-              />
+              <div className="rv-password-wrap">
+                <input
+                  className="rv-input"
+                  type={showPassword ? "text" : "password"}
+                  placeholder={authMode === "signup" ? "mínimo 6 caracteres" : "tu contraseña"}
+                  value={passwordInput}
+                  onChange={(e) => setPasswordInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && authMode === "signin") handleAuth();
+                  }}
+                  disabled={authLoading}
+                />
+                <button
+                  type="button"
+                  className="rv-password-toggle"
+                  onClick={() => setShowPassword((v) => !v)}
+                  tabIndex={-1}
+                  title={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+                >
+                  {showPassword ? "🙈" : "👁"}
+                </button>
+              </div>
               {authMode === "signin" && (
                 <div style={{ marginTop: 8, textAlign: "right" }}>
                   <button
