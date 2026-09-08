@@ -357,6 +357,32 @@ ${FONT_IMPORT}
   color: var(--ink-soft); margin-bottom: 14px;
 }
 
+/* ---- Relatos ---- */
+.rv-story-card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 16px;
+  margin-bottom: 18px;
+}
+.rv-story-title { font-family: 'Bebas Neue', sans-serif; letter-spacing: 0.03em; font-size: 20px; margin: 8px 0 6px; }
+.rv-story-content { font-size: 14px; line-height: 1.6; white-space: pre-wrap; color: var(--ink); margin-bottom: 12px; }
+.rv-reactions { display: flex; gap: 8px; flex-wrap: wrap; }
+.rv-reaction-btn {
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  color: var(--ink-soft);
+  border-radius: 20px;
+  padding: 5px 12px;
+  font-size: 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.rv-reaction-btn.active { background: var(--accent-soft); border-color: var(--accent); color: var(--flash); }
+.rv-reaction-btn:hover { border-color: var(--ink-soft); }
+
 /* ---- Mobile ---- */
 @media (max-width: 640px) {
   .rv-auth-wrap { padding: 24px 14px; min-height: auto; }
@@ -651,6 +677,13 @@ function Revelado() {
   const [publishingProduct, setPublishingProduct] = useState(false);
   const productFileInputRef = useRef(null);
 
+  const [stories, setStories] = useState([]);
+  const [storyTitle, setStoryTitle] = useState("");
+  const [storyContent, setStoryContent] = useState("");
+  const [publishingStory, setPublishingStory] = useState(false);
+  const [storyCommentDrafts, setStoryCommentDrafts] = useState({});
+  const [expandedStories, setExpandedStories] = useState({});
+
   const isAdmin = !!(profile && profile.is_admin);
 
   // Detect a Supabase password-recovery link (#access_token=...&type=recovery)
@@ -775,6 +808,18 @@ function Revelado() {
     }
   }, []);
 
+  const loadStories = useCallback(async (token) => {
+    try {
+      const data = await sbRest(
+        "stories?select=*,author:profiles(username,avatar_url,verified),reactions:story_reactions(id,type,user_id),comments:story_comments(id,text,created_at,author:profiles(username))&order=created_at.desc",
+        { token }
+      );
+      setStories(data || []);
+    } catch (e) {
+      console.error("loadStories", e);
+    }
+  }, []);
+
   const loadVerifications = useCallback(async (token) => {
     try {
       const data = await sbRest(
@@ -803,12 +848,13 @@ function Revelado() {
         loadUsers(token),
         loadDms(token, myId),
         loadProducts(token),
+        loadStories(token),
         loadMyVerification(token, myId),
       ];
       if (admin) calls.push(loadVerifications(token));
       await Promise.all(calls);
     },
-    [loadFeed, loadUsers, loadDms, loadProducts, loadVerifications, loadMyVerification]
+    [loadFeed, loadUsers, loadDms, loadProducts, loadStories, loadVerifications, loadMyVerification]
   );
 
   useEffect(() => {
@@ -1173,6 +1219,89 @@ function Revelado() {
     } catch (err) {
       console.error(err);
       await loadProducts(session.accessToken);
+    }
+  }
+
+  // ---- Relatos ----
+  async function handlePublishStory() {
+    if (!session || !storyContent.trim() || publishingStory) return;
+    setPublishingStory(true);
+    try {
+      await sbRest("stories", {
+        method: "POST",
+        token: session.accessToken,
+        body: { author_id: profile.id, title: storyTitle.trim() || null, content: storyContent.trim() },
+      });
+      setStoryTitle("");
+      setStoryContent("");
+      await loadStories(session.accessToken);
+    } catch (err) {
+      console.error(err);
+      alert("No se pudo publicar el relato: " + err.message);
+    } finally {
+      setPublishingStory(false);
+    }
+  }
+
+  async function handleDeleteStory(storyId) {
+    if (!session) return;
+    setStories((prev) => prev.filter((s) => s.id !== storyId));
+    try {
+      await sbRest(`stories?id=eq.${storyId}`, { method: "DELETE", token: session.accessToken });
+    } catch (err) {
+      console.error(err);
+      await loadStories(session.accessToken);
+    }
+  }
+
+  async function handleReactToStory(story, type) {
+    if (!session || !profile) return;
+    const mine = (story.reactions || []).find((r) => r.user_id === profile.id);
+    try {
+      if (mine && mine.type === type) {
+        await sbRest(`story_reactions?id=eq.${mine.id}`, { method: "DELETE", token: session.accessToken });
+      } else if (mine) {
+        await sbRest(`story_reactions?id=eq.${mine.id}`, {
+          method: "PATCH",
+          token: session.accessToken,
+          body: { type },
+        });
+      } else {
+        await sbRest("story_reactions", {
+          method: "POST",
+          token: session.accessToken,
+          body: { story_id: story.id, user_id: profile.id, type },
+        });
+      }
+      await loadStories(session.accessToken);
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
+  async function handleAddStoryComment(storyId) {
+    const text = (storyCommentDrafts[storyId] || "").trim();
+    if (!text || !session) return;
+    setStoryCommentDrafts((d) => ({ ...d, [storyId]: "" }));
+    try {
+      await sbRest("story_comments", {
+        method: "POST",
+        token: session.accessToken,
+        body: { story_id: storyId, author_id: profile.id, text },
+      });
+      await loadStories(session.accessToken);
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
+  async function handleDeleteStoryComment(commentId) {
+    if (!session) return;
+    try {
+      await sbRest(`story_comments?id=eq.${commentId}`, { method: "DELETE", token: session.accessToken });
+      await loadStories(session.accessToken);
+    } catch (err) {
+      console.error(err);
     }
   }
 
@@ -1556,6 +1685,15 @@ function Revelado() {
                   }}
                 >
                   Sala
+                </button>
+                <button
+                  className={`rv-tab ${view === "stories" ? "active" : ""}`}
+                  onClick={() => {
+                    setView("stories");
+                    setActiveDmUser(null);
+                  }}
+                >
+                  Relatos
                 </button>
                 <button
                   className={`rv-tab ${view === "chat" ? "active" : ""}`}
@@ -2001,6 +2139,148 @@ function Revelado() {
                       </button>
                     </div>
                   </>
+                )}
+              </div>
+            )}
+
+            {view === "stories" && (
+              <div>
+                <div className="rv-upload-box">
+                  <label className="rv-field-label">Título (opcional)</label>
+                  <input
+                    className="rv-input"
+                    placeholder="Dale un título a tu relato..."
+                    value={storyTitle}
+                    onChange={(e) => setStoryTitle(e.target.value)}
+                    style={{ marginBottom: 10 }}
+                  />
+                  <label className="rv-field-label">Tu relato</label>
+                  <textarea
+                    className="rv-caption-input"
+                    style={{ width: "100%", minHeight: 100 }}
+                    placeholder="Escribe aquí..."
+                    value={storyContent}
+                    onChange={(e) => setStoryContent(e.target.value)}
+                  />
+                  <div className="rv-upload-actions">
+                    <button
+                      className="rv-btn"
+                      disabled={!storyContent.trim() || publishingStory}
+                      onClick={handlePublishStory}
+                    >
+                      {publishingStory ? "PUBLICANDO..." : "PUBLICAR RELATO"}
+                    </button>
+                  </div>
+                </div>
+
+                {stories.length === 0 ? (
+                  <div className="rv-empty">
+                    <div className="rv-display">TODAVÍA NO HAY RELATOS</div>
+                    <p>Sé la primera persona en compartir uno.</p>
+                  </div>
+                ) : (
+                  stories.map((story) => {
+                    const reactions = story.reactions || [];
+                    const comments = story.comments || [];
+                    const myReaction = reactions.find((r) => r.user_id === profile.id);
+                    const counts = { like: 0, heart: 0, wow: 0 };
+                    reactions.forEach((r) => {
+                      if (counts[r.type] !== undefined) counts[r.type]++;
+                    });
+                    const isOpen = !!expandedStories[story.id];
+                    const canDeleteStory = isAdmin || story.author.username === profile.username;
+                    return (
+                      <div className="rv-story-card" key={story.id}>
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                          <div
+                            style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}
+                            onClick={() => openProfile(story.author.username)}
+                          >
+                            <AvatarCircle username={story.author.username} avatarUrl={story.author.avatar_url} size={22} />
+                            <span className="rv-frame-username">{story.author.username}</span>
+                            {story.author.verified && (
+                              <span title="Cuenta verificada" style={{ fontSize: 12 }}>✅</span>
+                            )}
+                          </div>
+                          <span className="rv-timestamp rv-mono">{timeAgo(story.created_at)}</span>
+                        </div>
+                        {story.title && <div className="rv-story-title">{story.title}</div>}
+                        <div className="rv-story-content">{story.content}</div>
+                        <div className="rv-reactions">
+                          <button
+                            className={`rv-reaction-btn ${myReaction && myReaction.type === "like" ? "active" : ""}`}
+                            onClick={() => handleReactToStory(story, "like")}
+                          >
+                            👍 {counts.like > 0 && counts.like}
+                          </button>
+                          <button
+                            className={`rv-reaction-btn ${myReaction && myReaction.type === "heart" ? "active" : ""}`}
+                            onClick={() => handleReactToStory(story, "heart")}
+                          >
+                            ❤️ {counts.heart > 0 && counts.heart}
+                          </button>
+                          <button
+                            className={`rv-reaction-btn ${myReaction && myReaction.type === "wow" ? "active" : ""}`}
+                            onClick={() => handleReactToStory(story, "wow")}
+                          >
+                            😮 {counts.wow > 0 && counts.wow}
+                          </button>
+                          <button
+                            className="rv-reaction-btn"
+                            onClick={() => setExpandedStories((s) => ({ ...s, [story.id]: !s[story.id] }))}
+                          >
+                            💬 {comments.length > 0 ? comments.length : "comentar"}
+                          </button>
+                          {canDeleteStory && (
+                            <button
+                              className="rv-reaction-btn"
+                              style={{ color: "var(--accent)", marginLeft: "auto" }}
+                              onClick={() => handleDeleteStory(story.id)}
+                            >
+                              borrar
+                            </button>
+                          )}
+                        </div>
+                        {isOpen && (
+                          <div className="rv-comments" style={{ marginTop: 10 }}>
+                            {comments.map((c) => (
+                              <div className="rv-comment" key={c.id}>
+                                <span className="rv-comment-author">{c.author.username}</span>
+                                <span className="rv-comment-text" style={{ flex: 1 }}>
+                                  {c.text}
+                                </span>
+                                {(isAdmin || c.author.username === profile.username) && (
+                                  <button
+                                    className="rv-comment-toggle"
+                                    style={{ color: "var(--accent)", padding: "0 0 0 6px" }}
+                                    onClick={() => handleDeleteStoryComment(c.id)}
+                                  >
+                                    ✕
+                                  </button>
+                                )}
+                              </div>
+                            ))}
+                            <div className="rv-comment-form">
+                              <input
+                                className="rv-comment-input"
+                                placeholder="Escribe un comentario..."
+                                value={storyCommentDrafts[story.id] || ""}
+                                onChange={(e) =>
+                                  setStoryCommentDrafts((d) => ({ ...d, [story.id]: e.target.value }))
+                                }
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") handleAddStoryComment(story.id);
+                                }}
+                              />
+                              <button className="rv-send-mini" onClick={() => handleAddStoryComment(story.id)}>
+                                enviar
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })
                 )}
               </div>
             )}
