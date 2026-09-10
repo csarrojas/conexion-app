@@ -579,9 +579,13 @@ function RouletteGame({ options, isAdmin, onSaveOptions }) {
   const [result, setResult] = useState("");
   const [draftOptions, setDraftOptions] = useState(options);
   const [saving, setSaving] = useState(false);
+  const initializedDraftRef = useRef(false);
 
   useEffect(() => {
-    setDraftOptions(options);
+    if (!initializedDraftRef.current && options.length > 0) {
+      setDraftOptions(options);
+      initializedDraftRef.current = true;
+    }
   }, [options]);
 
   const numOptions = options.length;
