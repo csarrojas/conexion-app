@@ -572,6 +572,197 @@ function AvatarCircle({ username, avatarUrl, size = 26, ring, onClick }) {
   );
 }
 
+function RouletteGame({ options, isAdmin, onSaveOptions }) {
+  const canvasRef = useRef(null);
+  const currentAngleRef = useRef(0);
+  const [isSpinning, setIsSpinning] = useState(false);
+  const [result, setResult] = useState("");
+  const [draftOptions, setDraftOptions] = useState(options);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    setDraftOptions(options);
+  }, [options]);
+
+  const numOptions = options.length;
+  const arcSize = numOptions > 0 ? (2 * Math.PI) / numOptions : 0;
+
+  const drawRoulette = useCallback(
+    (angleOffset = 0) => {
+      const canvas = canvasRef.current;
+      if (!canvas || numOptions === 0) return;
+      const ctx = canvas.getContext("2d");
+      const centerX = canvas.width / 2;
+      const centerY = canvas.height / 2;
+      const radius = canvas.width / 2 - 10;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      for (let i = 0; i < numOptions; i++) {
+        const angle = angleOffset + i * arcSize;
+        ctx.fillStyle = i % 2 === 0 ? "#8b0000" : "#1a1a1a";
+        ctx.beginPath();
+        ctx.moveTo(centerX, centerY);
+        ctx.arc(centerX, centerY, radius, angle, angle + arcSize);
+        ctx.lineTo(centerX, centerY);
+        ctx.fill();
+        ctx.strokeStyle = "#d4af37";
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        ctx.save();
+        ctx.translate(centerX, centerY);
+        ctx.rotate(angle + arcSize / 2);
+        ctx.textAlign = "right";
+        ctx.fillStyle = "#f3e5ab";
+        ctx.font = "bold 14px Georgia";
+        ctx.shadowColor = "black";
+        ctx.shadowBlur = 4;
+        ctx.fillText(options[i], radius - 20, 5);
+        ctx.restore();
+      }
+      ctx.beginPath();
+      ctx.arc(centerX, centerY, 35, 0, 2 * Math.PI);
+      const gradient = ctx.createRadialGradient(centerX, centerY, 5, centerX, centerY, 35);
+      gradient.addColorStop(0, "#f3e5ab");
+      gradient.addColorStop(0.5, "#d4af37");
+      gradient.addColorStop(1, "#aa7c11");
+      ctx.fillStyle = gradient;
+      ctx.fill();
+      ctx.strokeStyle = "#0f0f0f";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    },
+    [options, numOptions, arcSize]
+  );
+
+  useEffect(() => {
+    drawRoulette(currentAngleRef.current);
+  }, [drawRoulette]);
+
+  function spin() {
+    if (isSpinning || numOptions === 0) return;
+    setIsSpinning(true);
+    setResult("");
+    const winningIndex = Math.floor(Math.random() * numOptions);
+    const sectorCenterAngle = (winningIndex + 0.5) * arcSize;
+    const targetPointerAngle = 1.5 * Math.PI;
+    const targetAngle = targetPointerAngle - sectorCenterAngle;
+    const extraLaps = (Math.floor(Math.random() * 4) + 5) * 2 * Math.PI;
+    const startAngle = currentAngleRef.current;
+    const totalRotationNeeded = extraLaps + (targetAngle - (startAngle % (2 * Math.PI)));
+    let start = null;
+    const duration = 5000;
+
+    function animate(timestamp) {
+      if (!start) start = timestamp;
+      const progress = (timestamp - start) / duration;
+      if (progress < 1) {
+        const easeOut = 1 - Math.pow(1 - progress, 3);
+        drawRoulette(startAngle + totalRotationNeeded * easeOut);
+        requestAnimationFrame(animate);
+      } else {
+        currentAngleRef.current = startAngle + totalRotationNeeded;
+        drawRoulette(currentAngleRef.current);
+        setResult(`Resultado: ${options[winningIndex]}`);
+        setIsSpinning(false);
+      }
+    }
+    requestAnimationFrame(animate);
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+      <div
+        style={{
+          position: "relative",
+          padding: 15,
+          background: "linear-gradient(145deg, #d4af37, #aa7c11)",
+          borderRadius: "50%",
+          boxShadow: "0 10px 30px rgba(0,0,0,0.9), inset 0 2px 5px rgba(255,255,255,0.4)",
+        }}
+      >
+        <div
+          style={{
+            position: "absolute",
+            top: 3,
+            left: "50%",
+            transform: "translateX(-50%)",
+            width: 0,
+            height: 0,
+            borderLeft: "15px solid transparent",
+            borderRight: "15px solid transparent",
+            borderTop: "25px solid #f3e5ab",
+            zIndex: 10,
+            filter: "drop-shadow(0 4px 6px rgba(0,0,0,0.8))",
+          }}
+        />
+        <canvas
+          ref={canvasRef}
+          width={340}
+          height={340}
+          style={{ borderRadius: "50%", display: "block", boxShadow: "inset 0 0 20px rgba(0,0,0,0.8)", maxWidth: "100%" }}
+        />
+      </div>
+      <button
+        className="rv-btn"
+        style={{ width: "auto", padding: "12px 35px", marginTop: 24 }}
+        onClick={spin}
+        disabled={isSpinning || numOptions === 0}
+      >
+        {isSpinning ? "GIRANDO..." : "GIRAR RULETA"}
+      </button>
+      <div className="rv-display" style={{ fontSize: 20, marginTop: 14, minHeight: 26, color: "var(--flash)" }}>
+        {result}
+      </div>
+
+      {isAdmin && (
+        <div className="rv-upload-box" style={{ marginTop: 24, width: "100%" }}>
+          <div className="rv-section-title">Editar opciones de la ruleta (solo admin)</div>
+          {draftOptions.map((opt, i) => (
+            <div key={i} style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+              <input
+                className="rv-input"
+                value={opt}
+                onChange={(e) => {
+                  const next = [...draftOptions];
+                  next[i] = e.target.value;
+                  setDraftOptions(next);
+                }}
+              />
+              <button
+                className="rv-comment-toggle"
+                style={{ color: "var(--accent)" }}
+                onClick={() => setDraftOptions(draftOptions.filter((_, idx) => idx !== i))}
+              >
+                quitar
+              </button>
+            </div>
+          ))}
+          <div className="rv-upload-actions" style={{ justifyContent: "space-between" }}>
+            <button
+              className="rv-btn rv-btn-ghost"
+              style={{ width: "auto", marginTop: 0 }}
+              onClick={() => setDraftOptions([...draftOptions, ""])}
+            >
+              + agregar opción
+            </button>
+            <button
+              className="rv-btn"
+              style={{ width: "auto", marginTop: 0 }}
+              disabled={saving}
+              onClick={async () => {
+                setSaving(true);
+                await onSaveOptions(draftOptions.map((o) => o.trim()).filter(Boolean));
+                setSaving(false);
+              }}
+            >
+              {saving ? "GUARDANDO..." : "GUARDAR OPCIONES"}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default class ReveladoBoundary extends React.Component {
   constructor(props) {
     super(props);
@@ -683,6 +874,8 @@ function Revelado() {
   const [publishingStory, setPublishingStory] = useState(false);
   const [storyCommentDrafts, setStoryCommentDrafts] = useState({});
   const [expandedStories, setExpandedStories] = useState({});
+
+  const [rouletteOptions, setRouletteOptions] = useState([]);
 
   const isAdmin = !!(profile && profile.is_admin);
 
@@ -820,6 +1013,15 @@ function Revelado() {
     }
   }, []);
 
+  const loadGameConfig = useCallback(async (token) => {
+    try {
+      const data = await sbRest("game_config?id=eq.1&select=roulette_options", { token });
+      setRouletteOptions(data && data[0] ? data[0].roulette_options : []);
+    } catch (e) {
+      console.error("loadGameConfig", e);
+    }
+  }, []);
+
   const loadVerifications = useCallback(async (token) => {
     try {
       const data = await sbRest(
@@ -849,12 +1051,13 @@ function Revelado() {
         loadDms(token, myId),
         loadProducts(token),
         loadStories(token),
+        loadGameConfig(token),
         loadMyVerification(token, myId),
       ];
       if (admin) calls.push(loadVerifications(token));
       await Promise.all(calls);
     },
-    [loadFeed, loadUsers, loadDms, loadProducts, loadStories, loadVerifications, loadMyVerification]
+    [loadFeed, loadUsers, loadDms, loadProducts, loadStories, loadGameConfig, loadVerifications, loadMyVerification]
   );
 
   useEffect(() => {
@@ -1305,6 +1508,23 @@ function Revelado() {
     }
   }
 
+  // ---- Juegos ----
+  async function handleSaveRouletteOptions(newOptions) {
+    if (!isAdmin || !session) return;
+    try {
+      await sbRest("game_config?id=eq.1", {
+        method: "PATCH",
+        token: session.accessToken,
+        body: { roulette_options: newOptions, updated_at: new Date().toISOString() },
+      });
+      setRouletteOptions(newOptions);
+    } catch (err) {
+      console.error(err);
+      alert("No se pudieron guardar las opciones: " + err.message);
+    }
+  }
+
+
   async function handleToggleVerified(userId, currentlyVerified) {
     if (!isAdmin || !session) return;
     const next = !currentlyVerified;
@@ -1737,6 +1957,15 @@ function Revelado() {
                   }}
                 >
                   Tienda
+                </button>
+                <button
+                  className={`rv-tab ${view === "games" ? "active" : ""}`}
+                  onClick={() => {
+                    setView("games");
+                    setActiveDmUser(null);
+                  }}
+                >
+                  Juegos
                 </button>
                 {isAdmin && (
                   <button
@@ -2667,6 +2896,17 @@ function Revelado() {
                     ))}
                   </div>
                 )}
+              </div>
+            )}
+
+            {view === "games" && (
+              <div>
+                <div className="rv-section-title">Ruleta</div>
+                <RouletteGame
+                  options={rouletteOptions}
+                  isAdmin={isAdmin}
+                  onSaveOptions={handleSaveRouletteOptions}
+                />
               </div>
             )}
 
