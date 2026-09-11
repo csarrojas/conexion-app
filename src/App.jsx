@@ -1075,9 +1075,19 @@ function Revelado() {
     return () => clearInterval(id);
   }, [session, profile, loadAll]);
 
+  function scrollChatToBottom() {
+    if (chatLogRef.current) {
+      chatLogRef.current.scrollTop = chatLogRef.current.scrollHeight;
+    }
+  }
+
   useEffect(() => {
     if (view === "chat" && chatLogRef.current) {
-      chatLogRef.current.scrollTop = chatLogRef.current.scrollHeight;
+      scrollChatToBottom();
+      // Run again shortly after, in case images inside the messages are
+      // still loading and change the total height.
+      const t = setTimeout(scrollChatToBottom, 150);
+      return () => clearTimeout(t);
     }
   }, [dms, view, activeDmUser]);
 
@@ -1690,7 +1700,7 @@ function Revelado() {
             </h1>
             <p className="rv-tagline rv-mono">
               Un lugar seguro para compartir. Publica, comenta y envía
-              mensajes privados con total seguridad.
+              mensajes privados, con total seguridad.
             </p>
             <div className="rv-mode-tabs">
               <button
@@ -2286,6 +2296,7 @@ function Revelado() {
                             <img
                               src={m.image_url}
                               alt="imagen adjunta"
+                              onLoad={scrollChatToBottom}
                               style={{ maxWidth: "70%", borderRadius: 6, marginTop: 4, border: "1px solid var(--line)" }}
                             />
                           )}
