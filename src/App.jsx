@@ -1075,20 +1075,40 @@ function Revelado() {
     return () => clearInterval(id);
   }, [session, profile, loadAll]);
 
+  const nearChatBottomRef = useRef(true);
+  const prevActiveDmUserRef = useRef(undefined);
+
   function scrollChatToBottom() {
     if (chatLogRef.current) {
       chatLogRef.current.scrollTop = chatLogRef.current.scrollHeight;
+      nearChatBottomRef.current = true;
     }
   }
 
+  function maybeScrollChatToBottom() {
+    if (nearChatBottomRef.current) scrollChatToBottom();
+  }
+
+  function handleChatScroll() {
+    const el = chatLogRef.current;
+    if (!el) return;
+    const threshold = 60;
+    nearChatBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < threshold;
+  }
+
   useEffect(() => {
-    if (view === "chat" && chatLogRef.current) {
+    const justOpened = prevActiveDmUserRef.current !== activeDmUser;
+    prevActiveDmUserRef.current = activeDmUser;
+    if (view !== "chat" || !chatLogRef.current) return;
+    if (justOpened) {
+      // Opening a conversation always jumps to the latest message.
       scrollChatToBottom();
-      // Run again shortly after, in case images inside the messages are
-      // still loading and change the total height.
       const t = setTimeout(scrollChatToBottom, 150);
       return () => clearTimeout(t);
     }
+    // A background refresh arrived — only follow it down if the person
+    // was already at the bottom (reading old messages is never interrupted).
+    maybeScrollChatToBottom();
   }, [dms, view, activeDmUser]);
 
   function unreadCountWith(otherUsername) {
@@ -2273,7 +2293,7 @@ function Revelado() {
                       </button>
                       conversación con {activeDmUser}
                     </div>
-                    <div className="rv-chat-log" ref={chatLogRef}>
+                    <div className="rv-chat-log" ref={chatLogRef} onScroll={handleChatScroll}>
                       {(dms[dmKey(profile.username, activeDmUser)] || []).length === 0 && (
                         <div className="rv-empty" style={{ padding: "30px 0" }}>
                           Todavía no hay mensajes. ¡Escribe el primero!
@@ -2296,7 +2316,7 @@ function Revelado() {
                             <img
                               src={m.image_url}
                               alt="imagen adjunta"
-                              onLoad={scrollChatToBottom}
+                              onLoad={maybeScrollChatToBottom}
                               style={{ maxWidth: "70%", borderRadius: 6, marginTop: 4, border: "1px solid var(--line)" }}
                             />
                           )}
