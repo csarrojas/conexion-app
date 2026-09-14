@@ -964,14 +964,16 @@ function Revelado() {
   const loadUsers = useCallback(async (token) => {
     try {
       const data = await sbRest(
-        "profiles?select=id,username,is_admin,banned,created_at,avatar_url,verified&banned=eq.false&order=created_at.asc",
+        "profiles?select=id,username,is_admin,banned,created_at,avatar_url,verified,can_message&banned=eq.false&order=created_at.asc",
         { token }
       );
       setUsers(data || []);
       setProfile((prev) => {
         if (!prev) return prev;
         const mine = (data || []).find((u) => u.id === prev.id);
-        return mine && mine.verified !== prev.verified ? { ...prev, verified: mine.verified } : prev;
+        if (!mine) return prev;
+        if (mine.verified === prev.verified && mine.can_message === prev.can_message) return prev;
+        return { ...prev, verified: mine.verified, can_message: mine.can_message };
       });
     } catch (e) {
       console.error("loadUsers", e);
@@ -1400,6 +1402,22 @@ function Revelado() {
     }
   }
 
+  async function handleToggleCanMessage(userId, currentlyCan) {
+    if (!isAdmin || !session) return;
+    const next = !currentlyCan;
+    setUsers((prev) => prev.map((u) => (u.id === userId ? { ...u, can_message: next } : u)));
+    try {
+      await sbRest(`profiles?id=eq.${userId}`, {
+        method: "PATCH",
+        token: session.accessToken,
+        body: { can_message: next },
+      });
+    } catch (err) {
+      console.error(err);
+      await loadUsers(session.accessToken);
+    }
+  }
+
   // ---- Tienda ----
   async function handleProductFilePick(e) {
     const file = e.target.files && e.target.files[0];
@@ -1636,7 +1654,7 @@ function Revelado() {
   }
 
   async function handleSendDm() {
-    if (!activeDmUser || !session) return;
+    if (!activeDmUser || !session || profile.can_message === false) return;
     const text = dmDraft.trim();
     if (!text && !dmImageBlob) return;
     const otherUser = users.find((u) => u.username === activeDmUser);
@@ -2355,53 +2373,69 @@ function Revelado() {
                         </button>
                       </div>
                     )}
-                    <div className="rv-chat-form">
+                    {profile.can_message === false ? (
                       <div
-                        className="rv-btn rv-btn-ghost"
                         style={{
-                          position: "relative",
-                          width: "auto",
-                          marginTop: 0,
-                          padding: "0 14px",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
+                          background: "var(--surface-2)",
+                          border: "1px solid var(--line)",
+                          borderRadius: "0 0 4px 4px",
+                          padding: 14,
+                          fontSize: 13,
+                          color: "var(--ink-soft)",
+                          textAlign: "center",
                         }}
-                        title="Adjuntar imagen"
                       >
-                        📎
-                        <input
-                          type="file"
-                          accept="image/*"
-                          ref={dmFileInputRef}
-                          onChange={handleDmFilePick}
+                        🔇 Un administrador restringió tu capacidad de enviar mensajes.
+                      </div>
+                    ) : (
+                      <div className="rv-chat-form">
+                        <div
+                          className="rv-btn rv-btn-ghost"
                           style={{
-                            position: "absolute",
-                            inset: 0,
-                            width: "100%",
-                            height: "100%",
-                            opacity: 0,
-                            cursor: "pointer",
+                            position: "relative",
+                            width: "auto",
+                            marginTop: 0,
+                            padding: "0 14px",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                          }}
+                          title="Adjuntar imagen"
+                        >
+                          📎
+                          <input
+                            type="file"
+                            accept="image/*"
+                            ref={dmFileInputRef}
+                            onChange={handleDmFilePick}
+                            style={{
+                              position: "absolute",
+                              inset: 0,
+                              width: "100%",
+                              height: "100%",
+                              opacity: 0,
+                              cursor: "pointer",
+                            }}
+                          />
+                        </div>
+                        <input
+                          className="rv-chat-input"
+                          placeholder="Escribe un mensaje..."
+                          value={dmDraft}
+                          onChange={(e) => setDmDraft(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") handleSendDm();
                           }}
                         />
+                        <button
+                          className="rv-btn"
+                          style={{ width: "auto", marginTop: 0, padding: "0 20px" }}
+                          onClick={handleSendDm}
+                        >
+                          ENVIAR
+                        </button>
                       </div>
-                      <input
-                        className="rv-chat-input"
-                        placeholder="Escribe un mensaje..."
-                        value={dmDraft}
-                        onChange={(e) => setDmDraft(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") handleSendDm();
-                        }}
-                      />
-                      <button
-                        className="rv-btn"
-                        style={{ width: "auto", marginTop: 0, padding: "0 20px" }}
-                        onClick={handleSendDm}
-                      >
-                        ENVIAR
-                      </button>
-                    </div>
+                    )}
                   </>
                 )}
               </div>
@@ -2587,12 +2621,17 @@ function Revelado() {
                                 ADMIN
                               </span>
                             )}
+                            {isAdmin && u.can_message === false && (
+                              <span title="No puede enviar mensajes" style={{ marginLeft: 6, fontSize: 12 }}>
+                                🔇
+                              </span>
+                            )}
                           </div>
                           <div className="rv-member-joined rv-mono">se unió {timeAgo(u.created_at)}</div>
                         </div>
                       </div>
                       {u.username !== profile.username && (
-                        <div style={{ display: "flex", gap: 8 }}>
+                        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                           <button
                             className="rv-send-mini"
                             onClick={() => {
@@ -2602,6 +2641,19 @@ function Revelado() {
                           >
                             mensaje
                           </button>
+                          {isAdmin && (
+                            <button
+                              className="rv-send-mini"
+                              style={
+                                u.can_message
+                                  ? {}
+                                  : { color: "var(--flash)", borderColor: "var(--accent-soft)" }
+                              }
+                              onClick={() => handleToggleCanMessage(u.id, u.can_message)}
+                            >
+                              {u.can_message === false ? "permitir mensajes" : "silenciar mensajes"}
+                            </button>
+                          )}
                           {isAdmin && (
                             <button
                               className="rv-send-mini"
