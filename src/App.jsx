@@ -767,6 +767,135 @@ function RouletteGame({ options, isAdmin, onSaveOptions }) {
   );
 }
 
+const DICE_COUNT_OPTIONS = [1, 2, 3, 4, 5, 6];
+const DICE_SIDES_OPTIONS = [2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 20, 100];
+
+function DiceGame() {
+  const [numDice, setNumDice] = useState(1);
+  const [numSides, setNumSides] = useState(6);
+  const [results, setResults] = useState([]);
+  const [rolling, setRolling] = useState(false);
+
+  function roll() {
+    if (rolling) return;
+    setRolling(true);
+    const finalResults = Array.from({ length: numDice }, () => Math.floor(Math.random() * numSides) + 1);
+
+    let ticks = 0;
+    const maxTicks = 10;
+    const interval = setInterval(() => {
+      ticks++;
+      if (ticks >= maxTicks) {
+        clearInterval(interval);
+        setResults(finalResults);
+        setRolling(false);
+      } else {
+        setResults(
+          Array.from({ length: numDice }, () => Math.floor(Math.random() * numSides) + 1)
+        );
+      }
+    }, 80);
+  }
+
+  const total = results.reduce((sum, r) => sum + r, 0);
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+      <div style={{ display: "flex", gap: 20, flexWrap: "wrap", justifyContent: "center", marginBottom: 22 }}>
+        <div>
+          <label className="rv-field-label">Número de dados</label>
+          <select
+            className="rv-input"
+            value={numDice}
+            onChange={(e) => {
+              setNumDice(Number(e.target.value));
+              setResults([]);
+            }}
+            style={{ width: 140 }}
+          >
+            {DICE_COUNT_OPTIONS.map((n) => (
+              <option key={n} value={n}>
+                {n} dado{n === 1 ? "" : "s"}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="rv-field-label">Número de caras</label>
+          <select
+            className="rv-input"
+            value={numSides}
+            onChange={(e) => {
+              setNumSides(Number(e.target.value));
+              setResults([]);
+            }}
+            style={{ width: 140 }}
+          >
+            {DICE_SIDES_OPTIONS.map((n) => (
+              <option key={n} value={n}>
+                {n} caras
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      <div
+        style={{
+          display: "flex",
+          gap: 12,
+          flexWrap: "wrap",
+          justifyContent: "center",
+          minHeight: 74,
+          alignItems: "center",
+        }}
+      >
+        {results.length === 0 ? (
+          <span style={{ color: "var(--ink-soft)", fontSize: 13 }}>Toca "Tirar" para lanzar los dados</span>
+        ) : (
+          results.map((r, i) => (
+            <div
+              key={i}
+              className="rv-mono"
+              style={{
+                width: 58,
+                height: 58,
+                borderRadius: 10,
+                background: "linear-gradient(160deg, var(--paper), var(--paper-2))",
+                color: "#14171c",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: 22,
+                fontWeight: 700,
+                boxShadow: "0 4px 10px rgba(0,0,0,0.5)",
+                border: "1px solid var(--line)",
+              }}
+            >
+              {r}
+            </div>
+          ))
+        )}
+      </div>
+
+      {results.length > 1 && (
+        <div className="rv-timestamp rv-mono" style={{ marginTop: 10 }}>
+          Total: {total}
+        </div>
+      )}
+
+      <button
+        className="rv-btn"
+        style={{ width: "auto", padding: "12px 35px", marginTop: 24 }}
+        onClick={roll}
+        disabled={rolling}
+      >
+        {rolling ? "TIRANDO..." : "TIRAR"}
+      </button>
+    </div>
+  );
+}
+
 export default class ReveladoBoundary extends React.Component {
   constructor(props) {
     super(props);
@@ -880,6 +1009,7 @@ function Revelado() {
   const [expandedStories, setExpandedStories] = useState({});
 
   const [rouletteOptions, setRouletteOptions] = useState([]);
+  const [gameChoice, setGameChoice] = useState("roulette"); // 'roulette' | 'dice'
 
   const isAdmin = !!(profile && profile.is_admin);
 
@@ -2988,12 +3118,35 @@ function Revelado() {
 
             {view === "games" && (
               <div>
-                <div className="rv-section-title">Ruleta</div>
-                <RouletteGame
-                  options={rouletteOptions}
-                  isAdmin={isAdmin}
-                  onSaveOptions={handleSaveRouletteOptions}
-                />
+                <div className="rv-section-title" style={{ display: "flex", gap: 16 }}>
+                  <span
+                    style={{
+                      cursor: "pointer",
+                      color: gameChoice === "roulette" ? "var(--flash)" : "var(--ink-soft)",
+                    }}
+                    onClick={() => setGameChoice("roulette")}
+                  >
+                    Ruleta
+                  </span>
+                  <span
+                    style={{
+                      cursor: "pointer",
+                      color: gameChoice === "dice" ? "var(--flash)" : "var(--ink-soft)",
+                    }}
+                    onClick={() => setGameChoice("dice")}
+                  >
+                    Dados
+                  </span>
+                </div>
+                {gameChoice === "roulette" ? (
+                  <RouletteGame
+                    options={rouletteOptions}
+                    isAdmin={isAdmin}
+                    onSaveOptions={handleSaveRouletteOptions}
+                  />
+                ) : (
+                  <DiceGame />
+                )}
               </div>
             )}
 
