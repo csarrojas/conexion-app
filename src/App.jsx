@@ -357,26 +357,76 @@ ${FONT_IMPORT}
   color: var(--ink-soft); margin-bottom: 14px;
 }
 
-/* ---- Dados ---- */
+/* ---- Cartas ---- */
 .rv-dice-3d-wrap {
-  perspective: 900px;
+  perspective: 1100px;
   display: flex;
   justify-content: center;
 }
-.rv-dice-face-3d {
-  width: 340px;
-  max-width: 100%;
-  aspect-ratio: 1 / 1;
-  border-radius: 26px;
+.rv-card-frame {
+  width: 260px;
+  max-width: 78vw;
+  aspect-ratio: 5 / 7;
+  padding: 10px;
+  border-radius: 20px;
+  background: linear-gradient(145deg, #f3e5ab, #d4af37 45%, #aa7c11);
+  box-shadow: 0 18px 40px rgba(0,0,0,0.7), inset 0 2px 4px rgba(255,255,255,0.5);
+  transform-style: preserve-3d;
+  transform: rotateX(0deg) rotateY(0deg) rotateZ(0deg);
+}
+.rv-card-inner {
+  width: 100%;
+  height: 100%;
+  border-radius: 12px;
+  background: #0d0d0d;
+  border: 1px solid #3a2f10;
   display: flex;
   align-items: center;
   justify-content: center;
   overflow: hidden;
-  border: 1px solid var(--line);
-  box-shadow: 0 18px 40px rgba(0,0,0,0.7), inset 0 2px 6px rgba(255,255,255,0.5);
-  transform-style: preserve-3d;
-  transform: rotateX(0deg) rotateY(0deg) rotateZ(0deg);
 }
+.rv-card-image {
+  width: 88%;
+  height: 88%;
+  object-fit: contain;
+  border-radius: 4px;
+}
+.rv-card-back {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  padding: 22px;
+  text-align: center;
+  background:
+    repeating-linear-gradient(45deg, rgba(212,175,55,0.06) 0 10px, transparent 10px 20px),
+    radial-gradient(circle at 50% 38%, #2a0505 0%, #1a1a1a 62%, #0d0d0d 100%);
+}
+.rv-card-back-ring {
+  width: 92px;
+  height: 92px;
+  border-radius: 50%;
+  background: linear-gradient(145deg, #f3e5ab, #d4af37, #aa7c11);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 6px 16px rgba(0,0,0,0.6);
+}
+.rv-card-back-ring-inner {
+  width: 74px;
+  height: 74px;
+  border-radius: 50%;
+  background: #8b0000;
+  border: 2px solid #1a1a1a;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.rv-card-back-suit { font-size: 34px; color: #f3e5ab; }
+.rv-card-back-msg { color: #d9c48f; font-size: 13px; line-height: 1.5; }
 @keyframes rv-dice-spin-3d {
   0%   { transform: rotateX(0deg)   rotateY(0deg)   rotateZ(0deg); }
   20%  { transform: rotateX(220deg) rotateY(110deg) rotateZ(40deg); }
@@ -418,7 +468,7 @@ ${FONT_IMPORT}
   .rv-auth-wrap { padding: 24px 14px; min-height: auto; }
   .rv-auth-card { padding: 26px 18px 20px; max-width: 100%; }
   .rv-logo { font-size: 34px; }
-  .rv-dice-face-3d { width: 260px; }
+  .rv-card-frame { width: 220px; }
 
   .rv-nav {
     flex-wrap: wrap;
@@ -800,10 +850,21 @@ function RouletteGame({ options, isAdmin, onSaveOptions }) {
 
 const DICE_SIDES = 12;
 
-function DiceGame({ diceFaces, isAdmin, onUploadFace, uploadingFace }) {
+function DiceGame({ diceFaces, isAdmin, onUploadFace, uploadingFace, levelLabels, onSaveLevelLabels }) {
   const [result, setResult] = useState(null);
   const [rolling, setRolling] = useState(false);
   const [showEditor, setShowEditor] = useState(false);
+  const [editingLevels, setEditingLevels] = useState(false);
+  const [draftLevels, setDraftLevels] = useState(levelLabels);
+  const [savingLevels, setSavingLevels] = useState(false);
+  const initializedLevelsRef = useRef(false);
+
+  useEffect(() => {
+    if (!initializedLevelsRef.current && levelLabels.length > 0) {
+      setDraftLevels(levelLabels);
+      initializedLevelsRef.current = true;
+    }
+  }, [levelLabels]);
 
   function roll() {
     if (rolling) return;
@@ -833,21 +894,27 @@ function DiceGame({ diceFaces, isAdmin, onUploadFace, uploadingFace }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
       <div className="rv-dice-3d-wrap">
-        <div
-          className={rolling ? "rv-dice-face-3d rv-dice-rolling" : "rv-dice-face-3d"}
-          style={{ background: img ? "var(--paper)" : "linear-gradient(160deg, var(--paper), var(--paper-2))" }}
-        >
-          {result === null ? (
-            <span style={{ color: "#5a5348", fontSize: 15, padding: 20, textAlign: "center" }}>
-              Clic en "ELEGIR CARTA" para sacar una. 
-             </span>
-          ) : img ? (
-            <img src={img} alt={`carta ${result}`} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-          ) : (
-            <span className="rv-mono" style={{ fontSize: 96, fontWeight: 700, color: "#14171c" }}>
-              {result}
-            </span>
-          )}
+        <div className={rolling ? "rv-card-frame rv-dice-rolling" : "rv-card-frame"}>
+          <div className="rv-card-inner">
+            {result === null ? (
+              <div className="rv-card-back">
+                <div className="rv-card-back-ring">
+                  <div className="rv-card-back-ring-inner">
+                    <span className="rv-card-back-suit">♠</span>
+                  </div>
+                </div>
+                <span className="rv-card-back-msg">
+                  Clic en "ELEGIR CARTA" para sacar una.
+                </span>
+              </div>
+            ) : img ? (
+              <img src={img} alt={`carta ${result}`} className="rv-card-image" />
+            ) : (
+              <span className="rv-mono" style={{ fontSize: 72, fontWeight: 700, color: "#f3e5ab" }}>
+                {result}
+              </span>
+            )}
+          </div>
         </div>
       </div>
 
@@ -860,14 +927,63 @@ function DiceGame({ diceFaces, isAdmin, onUploadFace, uploadingFace }) {
         {rolling ? "ELIGIENDO..." : "ELEGIR CARTA"}
       </button>
 
+      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", justifyContent: "center", marginTop: 22, width: "100%" }}>
+        {[0, 1, 2].map((i) => (
+          <button
+            key={i}
+            className="rv-btn rv-btn-ghost"
+            style={{ width: "auto", marginTop: 0, flex: "1 1 140px", opacity: 0.6, cursor: "not-allowed" }}
+            disabled
+            title="Próximamente"
+          >
+            {(levelLabels[i] || `Nivel ${i + 1}`).toUpperCase()}
+          </button>
+        ))}
+      </div>
+
       {isAdmin && (
-        <button
-          className="rv-comment-toggle"
-          style={{ marginTop: 20 }}
-          onClick={() => setShowEditor((v) => !v)}
-        >
-          {showEditor ? "ocultar edición de cartas" : "🖼️ personalizar las 12 cartas (solo admin)"}
-        </button>
+        <div style={{ display: "flex", gap: 14, flexWrap: "wrap", justifyContent: "center", marginTop: 20 }}>
+          <button className="rv-comment-toggle" onClick={() => setShowEditor((v) => !v)}>
+            {showEditor ? "ocultar edición de cartas" : "🖼️ personalizar las 12 cartas (solo admin)"}
+          </button>
+          <button className="rv-comment-toggle" onClick={() => setEditingLevels((v) => !v)}>
+            {editingLevels ? "ocultar edición de niveles" : "✎ editar títulos de niveles superiores (solo admin)"}
+          </button>
+        </div>
+      )}
+
+      {isAdmin && editingLevels && (
+        <div className="rv-upload-box" style={{ marginTop: 14, width: "100%" }}>
+          <div className="rv-section-title">Títulos de los 3 niveles superiores</div>
+          {draftLevels.map((label, i) => (
+            <div key={i} style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+              <input
+                className="rv-input"
+                placeholder={`Nivel ${i + 1}`}
+                value={label}
+                onChange={(e) => {
+                  const next = [...draftLevels];
+                  next[i] = e.target.value;
+                  setDraftLevels(next);
+                }}
+              />
+            </div>
+          ))}
+          <div className="rv-upload-actions">
+            <button
+              className="rv-btn"
+              style={{ width: "auto", marginTop: 0 }}
+              disabled={savingLevels}
+              onClick={async () => {
+                setSavingLevels(true);
+                await onSaveLevelLabels(draftLevels.map((l, i) => l.trim() || `Nivel ${i + 1}`));
+                setSavingLevels(false);
+              }}
+            >
+              {savingLevels ? "GUARDANDO..." : "GUARDAR TÍTULOS"}
+            </button>
+          </div>
+        </div>
       )}
 
       {isAdmin && showEditor && (
@@ -1058,6 +1174,7 @@ function Revelado() {
   const [gameChoice, setGameChoice] = useState("roulette"); // 'roulette' | 'dice'
   const [diceFaces, setDiceFaces] = useState([]);
   const [uploadingFace, setUploadingFace] = useState(null);
+  const [levelLabels, setLevelLabels] = useState(["Nivel 1", "Nivel 2", "Nivel 3"]);
 
   const isAdmin = !!(profile && profile.is_admin);
 
@@ -1199,9 +1316,10 @@ function Revelado() {
 
   const loadGameConfig = useCallback(async (token) => {
     try {
-      const data = await sbRest("game_config?id=eq.1&select=roulette_options,dice_faces", { token });
+      const data = await sbRest("game_config?id=eq.1&select=roulette_options,dice_faces,level_labels", { token });
       setRouletteOptions(data && data[0] ? data[0].roulette_options : []);
       setDiceFaces(data && data[0] ? data[0].dice_faces || [] : []);
+      setLevelLabels(data && data[0] && data[0].level_labels ? data[0].level_labels : ["Nivel 1", "Nivel 2", "Nivel 3"]);
     } catch (e) {
       console.error("loadGameConfig", e);
     }
@@ -1752,6 +1870,21 @@ function Revelado() {
     } catch (err) {
       console.error(err);
       alert("No se pudieron guardar las opciones: " + err.message);
+    }
+  }
+
+  async function handleSaveLevelLabels(newLabels) {
+    if (!isAdmin || !session) return;
+    try {
+      await sbRest("game_config?id=eq.1", {
+        method: "PATCH",
+        token: session.accessToken,
+        body: { level_labels: newLabels, updated_at: new Date().toISOString() },
+      });
+      setLevelLabels(newLabels);
+    } catch (err) {
+      console.error(err);
+      alert("No se pudieron guardar los títulos: " + err.message);
     }
   }
 
@@ -3222,6 +3355,8 @@ function Revelado() {
                     isAdmin={isAdmin}
                     onUploadFace={handleUploadDiceFace}
                     uploadingFace={uploadingFace}
+                    levelLabels={levelLabels}
+                    onSaveLevelLabels={handleSaveLevelLabels}
                   />
                 )}
               </div>
