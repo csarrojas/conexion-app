@@ -358,15 +358,34 @@ ${FONT_IMPORT}
 }
 
 /* ---- Dados ---- */
-@keyframes rv-dice-spin {
-  0% { transform: rotate(0deg) scale(1); }
-  25% { transform: rotate(150deg) scale(1.1); }
-  50% { transform: rotate(230deg) scale(0.92); }
-  75% { transform: rotate(330deg) scale(1.06); }
-  100% { transform: rotate(360deg) scale(1); }
+.rv-dice-3d-wrap {
+  perspective: 900px;
+  display: flex;
+  justify-content: center;
 }
-.rv-dice-face { transition: transform 0.15s ease; }
-.rv-dice-rolling { animation: rv-dice-spin 0.4s linear infinite; }
+.rv-dice-face-3d {
+  width: 340px;
+  max-width: 100%;
+  aspect-ratio: 1 / 1;
+  border-radius: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  box-shadow: 0 18px 40px rgba(0,0,0,0.7), inset 0 2px 6px rgba(255,255,255,0.5);
+  transform-style: preserve-3d;
+  transform: rotateX(0deg) rotateY(0deg) rotateZ(0deg);
+}
+@keyframes rv-dice-spin-3d {
+  0%   { transform: rotateX(0deg)   rotateY(0deg)   rotateZ(0deg); }
+  20%  { transform: rotateX(220deg) rotateY(110deg) rotateZ(40deg); }
+  40%  { transform: rotateX(430deg) rotateY(260deg) rotateZ(130deg); }
+  60%  { transform: rotateX(610deg) rotateY(430deg) rotateZ(230deg); }
+  80%  { transform: rotateX(800deg) rotateY(600deg) rotateZ(310deg); }
+  100% { transform: rotateX(1000deg) rotateY(800deg) rotateZ(400deg); }
+}
+.rv-dice-rolling { animation: rv-dice-spin-3d 0.9s cubic-bezier(0.4, 0.1, 0.5, 1) infinite; }
 
 /* ---- Relatos ---- */
 .rv-story-card {
@@ -399,6 +418,7 @@ ${FONT_IMPORT}
   .rv-auth-wrap { padding: 24px 14px; min-height: auto; }
   .rv-auth-card { padding: 26px 18px 20px; max-width: 100%; }
   .rv-logo { font-size: 34px; }
+  .rv-dice-face-3d { width: 260px; }
 
   .rv-nav {
     flex-wrap: wrap;
@@ -778,120 +798,66 @@ function RouletteGame({ options, isAdmin, onSaveOptions }) {
   );
 }
 
-const DICE_COUNT_OPTIONS = [1, 2, 3, 4, 5, 6];
 const DICE_SIDES = 12;
 
 function DiceGame({ diceFaces, isAdmin, onUploadFace, uploadingFace }) {
-  const [numDice, setNumDice] = useState(1);
-  const [results, setResults] = useState([]);
+  const [result, setResult] = useState(null);
   const [rolling, setRolling] = useState(false);
   const [showEditor, setShowEditor] = useState(false);
 
   function roll() {
     if (rolling) return;
     setRolling(true);
-    const finalResults = Array.from({ length: numDice }, () => Math.floor(Math.random() * DICE_SIDES) + 1);
+    const finalResult = Math.floor(Math.random() * DICE_SIDES) + 1;
 
     let ticks = 0;
-    const maxTicks = 12;
+    const maxTicks = 14;
     const interval = setInterval(() => {
       ticks++;
       if (ticks >= maxTicks) {
         clearInterval(interval);
-        setResults(finalResults);
+        setResult(finalResult);
         setRolling(false);
       } else {
-        setResults(Array.from({ length: numDice }, () => Math.floor(Math.random() * DICE_SIDES) + 1));
+        setResult(Math.floor(Math.random() * DICE_SIDES) + 1);
       }
-    }, 80);
+    }, 90);
   }
-
-  const total = results.reduce((sum, r) => sum + r, 0);
 
   function faceImage(faceNumber) {
     return diceFaces && diceFaces[faceNumber - 1] ? diceFaces[faceNumber - 1] : null;
   }
 
+  const img = result ? faceImage(result) : null;
+
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
-      <div style={{ marginBottom: 22 }}>
-        <label className="rv-field-label">Número de dados</label>
-        <select
-          className="rv-input"
-          value={numDice}
-          onChange={(e) => {
-            setNumDice(Number(e.target.value));
-            setResults([]);
-          }}
-          style={{ width: 160 }}
+      <div className="rv-dice-3d-wrap">
+        <div
+          className={rolling ? "rv-dice-face-3d rv-dice-rolling" : "rv-dice-face-3d"}
+          style={{ background: img ? "var(--paper)" : "linear-gradient(160deg, var(--paper), var(--paper-2))" }}
         >
-          {DICE_COUNT_OPTIONS.map((n) => (
-            <option key={n} value={n}>
-              {n} dado{n === 1 ? "" : "s"} (12 caras)
-            </option>
-          ))}
-        </select>
-      </div>
-
-      <div
-        style={{
-          display: "flex",
-          gap: 12,
-          flexWrap: "wrap",
-          justifyContent: "center",
-          minHeight: 84,
-          alignItems: "center",
-        }}
-      >
-        {results.length === 0 ? (
-          <span style={{ color: "var(--ink-soft)", fontSize: 13 }}>Toca "Tirar" para lanzar los dados</span>
-        ) : (
-          results.map((r, i) => {
-            const img = faceImage(r);
-            return (
-              <div
-                key={i}
-                className={rolling ? "rv-dice-face rv-dice-rolling" : "rv-dice-face"}
-                style={{
-                  width: 74,
-                  height: 74,
-                  borderRadius: 10,
-                  background: img ? "var(--paper)" : "linear-gradient(160deg, var(--paper), var(--paper-2))",
-                  color: "#14171c",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  boxShadow: "0 4px 10px rgba(0,0,0,0.5)",
-                  border: "1px solid var(--line)",
-                  overflow: "hidden",
-                }}
-              >
-                {img ? (
-                  <img src={img} alt={`cara ${r}`} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                ) : (
-                  <span className="rv-mono" style={{ fontSize: 24, fontWeight: 700 }}>
-                    {r}
-                  </span>
-                )}
-              </div>
-            );
-          })
-        )}
-      </div>
-
-      {results.length > 1 && (
-        <div className="rv-timestamp rv-mono" style={{ marginTop: 10 }}>
-          Total: {total}
+          {result === null ? (
+            <span style={{ color: "#5a5348", fontSize: 15, padding: 20, textAlign: "center" }}>
+              Toca "Tirar" para lanzar el dado
+            </span>
+          ) : img ? (
+            <img src={img} alt={`cara ${result}`} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+          ) : (
+            <span className="rv-mono" style={{ fontSize: 96, fontWeight: 700, color: "#14171c" }}>
+              {result}
+            </span>
+          )}
         </div>
-      )}
+      </div>
 
       <button
         className="rv-btn"
-        style={{ width: "auto", padding: "12px 35px", marginTop: 24 }}
+        style={{ width: "auto", padding: "14px 44px", marginTop: 28, fontSize: 19 }}
         onClick={roll}
         disabled={rolling}
       >
-        {rolling ? "TIRANDO..." : "TIRAR"}
+        {rolling ? "TIRANDO..." : "TIRAR DADO"}
       </button>
 
       {isAdmin && (
@@ -918,7 +884,7 @@ function DiceGame({ diceFaces, isAdmin, onUploadFace, uploadingFace }) {
           >
             {Array.from({ length: 12 }).map((_, i) => {
               const faceNumber = i + 1;
-              const img = faceImage(faceNumber);
+              const faceImg = faceImage(faceNumber);
               const isUploading = uploadingFace === i;
               return (
                 <div key={i} style={{ textAlign: "center" }}>
@@ -939,8 +905,8 @@ function DiceGame({ diceFaces, isAdmin, onUploadFace, uploadingFace }) {
                   >
                     {isUploading ? (
                       <span style={{ fontSize: 11, color: "var(--ink-soft)" }}>…</span>
-                    ) : img ? (
-                      <img src={img} alt={`cara ${faceNumber}`} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                    ) : faceImg ? (
+                      <img src={faceImg} alt={`cara ${faceNumber}`} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                     ) : (
                       <span style={{ fontSize: 18, color: "var(--ink-soft)" }}>+</span>
                     )}
