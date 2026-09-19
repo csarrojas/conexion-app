@@ -811,7 +811,7 @@ function DiceGame({ diceFaces, isAdmin, onUploadFace, uploadingFace }) {
     const finalResult = Math.floor(Math.random() * DICE_SIDES) + 1;
 
     let ticks = 0;
-    const maxTicks = 25;
+    const maxTicks = 30;
     const interval = setInterval(() => {
       ticks++;
       if (ticks >= maxTicks) {
@@ -839,10 +839,10 @@ function DiceGame({ diceFaces, isAdmin, onUploadFace, uploadingFace }) {
         >
           {result === null ? (
             <span style={{ color: "#5a5348", fontSize: 15, padding: 20, textAlign: "center" }}>
-              Toca "Tirar" para lanzar el dado
+              Toca "Elegir carta" para sacar una
             </span>
           ) : img ? (
-            <img src={img} alt={`cara ${result}`} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+            <img src={img} alt={`carta ${result}`} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
           ) : (
             <span className="rv-mono" style={{ fontSize: 96, fontWeight: 700, color: "#14171c" }}>
               {result}
@@ -857,7 +857,7 @@ function DiceGame({ diceFaces, isAdmin, onUploadFace, uploadingFace }) {
         onClick={roll}
         disabled={rolling}
       >
-        {rolling ? "TIRANDO..." : "TIRAR DADO"}
+        {rolling ? "ELIGIENDO..." : "ELEGIR CARTA"}
       </button>
 
       {isAdmin && (
@@ -866,14 +866,14 @@ function DiceGame({ diceFaces, isAdmin, onUploadFace, uploadingFace }) {
           style={{ marginTop: 20 }}
           onClick={() => setShowEditor((v) => !v)}
         >
-          {showEditor ? "ocultar edición de caras" : "🖼️ personalizar las 12 caras (solo admin)"}
+          {showEditor ? "ocultar edición de cartas" : "🖼️ personalizar las 12 cartas (solo admin)"}
         </button>
       )}
 
       {isAdmin && showEditor && (
         <div className="rv-upload-box" style={{ marginTop: 14, width: "100%" }}>
           <div className="rv-section-title">
-            Una imagen por cada cara del dado (1 al 12)
+            Una imagen por cada carta del mazo (1 al 12)
           </div>
           <div
             style={{
@@ -906,7 +906,7 @@ function DiceGame({ diceFaces, isAdmin, onUploadFace, uploadingFace }) {
                     {isUploading ? (
                       <span style={{ fontSize: 11, color: "var(--ink-soft)" }}>…</span>
                     ) : faceImg ? (
-                      <img src={faceImg} alt={`cara ${faceNumber}`} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                      <img src={faceImg} alt={`carta ${faceNumber}`} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                     ) : (
                       <span style={{ fontSize: 18, color: "var(--ink-soft)" }}>+</span>
                     )}
@@ -3207,7 +3207,7 @@ function Revelado() {
                     }}
                     onClick={() => setGameChoice("dice")}
                   >
-                    Dados
+                    Cartas
                   </span>
                 </div>
                 {gameChoice === "roulette" ? (
