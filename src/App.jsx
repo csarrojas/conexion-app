@@ -840,8 +840,7 @@ function DiceGame({ diceFaces, isAdmin, onUploadFace, uploadingFace }) {
           {result === null ? (
             <span style={{ color: "#5a5348", fontSize: 15, padding: 20, textAlign: "center" }}>
               Clic en "ELEGIR CARTA" para sacar una. 
-              <br> QUE LO DISFRUTEN !!! </br>
-            </span>
+             </span>
           ) : img ? (
             <img src={img} alt={`carta ${result}`} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
           ) : (
