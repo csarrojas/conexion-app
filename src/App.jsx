@@ -821,7 +821,7 @@ function DiceGame({ diceFaces, isAdmin, onUploadFace, uploadingFace }) {
       } else {
         setResult(Math.floor(Math.random() * DICE_SIDES) + 1);
       }
-    }, 200);
+    }, 100);
   }
 
   function faceImage(faceNumber) {
