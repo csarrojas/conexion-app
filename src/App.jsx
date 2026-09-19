@@ -357,6 +357,17 @@ ${FONT_IMPORT}
   color: var(--ink-soft); margin-bottom: 14px;
 }
 
+/* ---- Dados ---- */
+@keyframes rv-dice-spin {
+  0% { transform: rotate(0deg) scale(1); }
+  25% { transform: rotate(150deg) scale(1.1); }
+  50% { transform: rotate(230deg) scale(0.92); }
+  75% { transform: rotate(330deg) scale(1.06); }
+  100% { transform: rotate(360deg) scale(1); }
+}
+.rv-dice-face { transition: transform 0.15s ease; }
+.rv-dice-rolling { animation: rv-dice-spin 0.4s linear infinite; }
+
 /* ---- Relatos ---- */
 .rv-story-card {
   background: var(--surface);
@@ -768,21 +779,21 @@ function RouletteGame({ options, isAdmin, onSaveOptions }) {
 }
 
 const DICE_COUNT_OPTIONS = [1, 2, 3, 4, 5, 6];
-const DICE_SIDES_OPTIONS = [2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 20, 100];
+const DICE_SIDES = 12;
 
-function DiceGame() {
+function DiceGame({ diceFaces, isAdmin, onUploadFace, uploadingFace }) {
   const [numDice, setNumDice] = useState(1);
-  const [numSides, setNumSides] = useState(6);
   const [results, setResults] = useState([]);
   const [rolling, setRolling] = useState(false);
+  const [showEditor, setShowEditor] = useState(false);
 
   function roll() {
     if (rolling) return;
     setRolling(true);
-    const finalResults = Array.from({ length: numDice }, () => Math.floor(Math.random() * numSides) + 1);
+    const finalResults = Array.from({ length: numDice }, () => Math.floor(Math.random() * DICE_SIDES) + 1);
 
     let ticks = 0;
-    const maxTicks = 10;
+    const maxTicks = 12;
     const interval = setInterval(() => {
       ticks++;
       if (ticks >= maxTicks) {
@@ -790,54 +801,36 @@ function DiceGame() {
         setResults(finalResults);
         setRolling(false);
       } else {
-        setResults(
-          Array.from({ length: numDice }, () => Math.floor(Math.random() * numSides) + 1)
-        );
+        setResults(Array.from({ length: numDice }, () => Math.floor(Math.random() * DICE_SIDES) + 1));
       }
     }, 80);
   }
 
   const total = results.reduce((sum, r) => sum + r, 0);
 
+  function faceImage(faceNumber) {
+    return diceFaces && diceFaces[faceNumber - 1] ? diceFaces[faceNumber - 1] : null;
+  }
+
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
-      <div style={{ display: "flex", gap: 20, flexWrap: "wrap", justifyContent: "center", marginBottom: 22 }}>
-        <div>
-          <label className="rv-field-label">Número de dados</label>
-          <select
-            className="rv-input"
-            value={numDice}
-            onChange={(e) => {
-              setNumDice(Number(e.target.value));
-              setResults([]);
-            }}
-            style={{ width: 140 }}
-          >
-            {DICE_COUNT_OPTIONS.map((n) => (
-              <option key={n} value={n}>
-                {n} dado{n === 1 ? "" : "s"}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label className="rv-field-label">Número de caras</label>
-          <select
-            className="rv-input"
-            value={numSides}
-            onChange={(e) => {
-              setNumSides(Number(e.target.value));
-              setResults([]);
-            }}
-            style={{ width: 140 }}
-          >
-            {DICE_SIDES_OPTIONS.map((n) => (
-              <option key={n} value={n}>
-                {n} caras
-              </option>
-            ))}
-          </select>
-        </div>
+      <div style={{ marginBottom: 22 }}>
+        <label className="rv-field-label">Número de dados</label>
+        <select
+          className="rv-input"
+          value={numDice}
+          onChange={(e) => {
+            setNumDice(Number(e.target.value));
+            setResults([]);
+          }}
+          style={{ width: 160 }}
+        >
+          {DICE_COUNT_OPTIONS.map((n) => (
+            <option key={n} value={n}>
+              {n} dado{n === 1 ? "" : "s"} (12 caras)
+            </option>
+          ))}
+        </select>
       </div>
 
       <div
@@ -846,35 +839,43 @@ function DiceGame() {
           gap: 12,
           flexWrap: "wrap",
           justifyContent: "center",
-          minHeight: 74,
+          minHeight: 84,
           alignItems: "center",
         }}
       >
         {results.length === 0 ? (
           <span style={{ color: "var(--ink-soft)", fontSize: 13 }}>Toca "Tirar" para lanzar los dados</span>
         ) : (
-          results.map((r, i) => (
-            <div
-              key={i}
-              className="rv-mono"
-              style={{
-                width: 58,
-                height: 58,
-                borderRadius: 10,
-                background: "linear-gradient(160deg, var(--paper), var(--paper-2))",
-                color: "#14171c",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                fontSize: 22,
-                fontWeight: 700,
-                boxShadow: "0 4px 10px rgba(0,0,0,0.5)",
-                border: "1px solid var(--line)",
-              }}
-            >
-              {r}
-            </div>
-          ))
+          results.map((r, i) => {
+            const img = faceImage(r);
+            return (
+              <div
+                key={i}
+                className={rolling ? "rv-dice-face rv-dice-rolling" : "rv-dice-face"}
+                style={{
+                  width: 74,
+                  height: 74,
+                  borderRadius: 10,
+                  background: img ? "var(--paper)" : "linear-gradient(160deg, var(--paper), var(--paper-2))",
+                  color: "#14171c",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  boxShadow: "0 4px 10px rgba(0,0,0,0.5)",
+                  border: "1px solid var(--line)",
+                  overflow: "hidden",
+                }}
+              >
+                {img ? (
+                  <img src={img} alt={`cara ${r}`} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                ) : (
+                  <span className="rv-mono" style={{ fontSize: 24, fontWeight: 700 }}>
+                    {r}
+                  </span>
+                )}
+              </div>
+            );
+          })
         )}
       </div>
 
@@ -892,6 +893,85 @@ function DiceGame() {
       >
         {rolling ? "TIRANDO..." : "TIRAR"}
       </button>
+
+      {isAdmin && (
+        <button
+          className="rv-comment-toggle"
+          style={{ marginTop: 20 }}
+          onClick={() => setShowEditor((v) => !v)}
+        >
+          {showEditor ? "ocultar edición de caras" : "🖼️ personalizar las 12 caras (solo admin)"}
+        </button>
+      )}
+
+      {isAdmin && showEditor && (
+        <div className="rv-upload-box" style={{ marginTop: 14, width: "100%" }}>
+          <div className="rv-section-title">
+            Una imagen por cada cara del dado (1 al 12)
+          </div>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fill, minmax(72px, 1fr))",
+              gap: 10,
+            }}
+          >
+            {Array.from({ length: 12 }).map((_, i) => {
+              const faceNumber = i + 1;
+              const img = faceImage(faceNumber);
+              const isUploading = uploadingFace === i;
+              return (
+                <div key={i} style={{ textAlign: "center" }}>
+                  <div
+                    style={{
+                      position: "relative",
+                      width: 64,
+                      height: 64,
+                      margin: "0 auto",
+                      borderRadius: 6,
+                      background: "var(--bg)",
+                      border: "1px solid var(--line)",
+                      overflow: "hidden",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    {isUploading ? (
+                      <span style={{ fontSize: 11, color: "var(--ink-soft)" }}>…</span>
+                    ) : img ? (
+                      <img src={img} alt={`cara ${faceNumber}`} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                    ) : (
+                      <span style={{ fontSize: 18, color: "var(--ink-soft)" }}>+</span>
+                    )}
+                    <input
+                      type="file"
+                      accept="image/*"
+                      disabled={isUploading}
+                      onChange={(e) => {
+                        const file = e.target.files && e.target.files[0];
+                        if (file) onUploadFace(i, file);
+                        e.target.value = "";
+                      }}
+                      style={{
+                        position: "absolute",
+                        inset: 0,
+                        width: "100%",
+                        height: "100%",
+                        opacity: 0,
+                        cursor: "pointer",
+                      }}
+                    />
+                  </div>
+                  <div className="rv-timestamp rv-mono" style={{ marginTop: 4 }}>
+                    {faceNumber}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1010,6 +1090,8 @@ function Revelado() {
 
   const [rouletteOptions, setRouletteOptions] = useState([]);
   const [gameChoice, setGameChoice] = useState("roulette"); // 'roulette' | 'dice'
+  const [diceFaces, setDiceFaces] = useState([]);
+  const [uploadingFace, setUploadingFace] = useState(null);
 
   const isAdmin = !!(profile && profile.is_admin);
 
@@ -1151,8 +1233,9 @@ function Revelado() {
 
   const loadGameConfig = useCallback(async (token) => {
     try {
-      const data = await sbRest("game_config?id=eq.1&select=roulette_options", { token });
+      const data = await sbRest("game_config?id=eq.1&select=roulette_options,dice_faces", { token });
       setRouletteOptions(data && data[0] ? data[0].roulette_options : []);
+      setDiceFaces(data && data[0] ? data[0].dice_faces || [] : []);
     } catch (e) {
       console.error("loadGameConfig", e);
     }
@@ -1703,6 +1786,29 @@ function Revelado() {
     } catch (err) {
       console.error(err);
       alert("No se pudieron guardar las opciones: " + err.message);
+    }
+  }
+
+  async function handleUploadDiceFace(faceIndex, file) {
+    if (!isAdmin || !session || !file) return;
+    setUploadingFace(faceIndex);
+    try {
+      const blob = await compressImageToBlob(file, 400, 0.8);
+      const url = await sbUpload(blob, session.accessToken, "dice");
+      const next = [...diceFaces];
+      while (next.length < 12) next.push(null);
+      next[faceIndex] = url;
+      await sbRest("game_config?id=eq.1", {
+        method: "PATCH",
+        token: session.accessToken,
+        body: { dice_faces: next, updated_at: new Date().toISOString() },
+      });
+      setDiceFaces(next);
+    } catch (err) {
+      console.error(err);
+      alert("No se pudo subir la imagen: " + err.message);
+    } finally {
+      setUploadingFace(null);
     }
   }
 
@@ -3145,7 +3251,12 @@ function Revelado() {
                     onSaveOptions={handleSaveRouletteOptions}
                   />
                 ) : (
-                  <DiceGame />
+                  <DiceGame
+                    diceFaces={diceFaces}
+                    isAdmin={isAdmin}
+                    onUploadFace={handleUploadDiceFace}
+                    uploadingFace={uploadingFace}
+                  />
                 )}
               </div>
             )}
