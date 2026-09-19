@@ -811,7 +811,7 @@ function DiceGame({ diceFaces, isAdmin, onUploadFace, uploadingFace }) {
     const finalResult = Math.floor(Math.random() * DICE_SIDES) + 1;
 
     let ticks = 0;
-    const maxTicks = 14;
+    const maxTicks = 25;
     const interval = setInterval(() => {
       ticks++;
       if (ticks >= maxTicks) {
@@ -821,7 +821,7 @@ function DiceGame({ diceFaces, isAdmin, onUploadFace, uploadingFace }) {
       } else {
         setResult(Math.floor(Math.random() * DICE_SIDES) + 1);
       }
-    }, 90);
+    }, 200);
   }
 
   function faceImage(faceNumber) {
