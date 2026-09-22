@@ -727,11 +727,20 @@ function RouletteGame({ options, isAdmin, onSaveOptions, rouletteLevels, onSaveL
     [currentOptions, numOptions, arcSize]
   );
 
+  // Only reset the spin position and result when the person actually
+  // switches levels — never as a side effect of a background data refresh.
   useEffect(() => {
     currentAngleRef.current = 0;
     setResult("");
     drawRoulette(0);
-  }, [activeLevel, drawRoulette]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeLevel]);
+
+  // Keep the wheel's labels in sync (e.g. after the admin edits options)
+  // without disturbing the current spin position or result.
+  useEffect(() => {
+    drawRoulette(currentAngleRef.current);
+  }, [drawRoulette]);
 
   function selectLevel(i) {
     if (isSpinning) return;
