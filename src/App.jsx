@@ -653,11 +653,13 @@ function AvatarCircle({ username, avatarUrl, size = 26, ring, onClick }) {
   );
 }
 
-function RouletteGame({ options, isAdmin, onSaveOptions }) {
+function RouletteGame({ options, isAdmin, onSaveOptions, rouletteLevels, onSaveLevel }) {
   const canvasRef = useRef(null);
   const currentAngleRef = useRef(0);
   const [isSpinning, setIsSpinning] = useState(false);
   const [result, setResult] = useState("");
+  const [activeLevel, setActiveLevel] = useState(null); // null = Nivel 1 (principal), 0 = Nivel 2, 1 = Nivel 3
+  const [editTarget, setEditTarget] = useState(null); // null (cerrado) | "base" | 0 | 1
   const [draftOptions, setDraftOptions] = useState(options);
   const [saving, setSaving] = useState(false);
   const initializedDraftRef = useRef(false);
@@ -669,13 +671,20 @@ function RouletteGame({ options, isAdmin, onSaveOptions }) {
     }
   }, [options]);
 
-  const numOptions = options.length;
+  const currentOptions = activeLevel === null ? options : rouletteLevels[activeLevel] || [];
+  const numOptions = currentOptions.length;
   const arcSize = numOptions > 0 ? (2 * Math.PI) / numOptions : 0;
 
   const drawRoulette = useCallback(
     (angleOffset = 0) => {
       const canvas = canvasRef.current;
-      if (!canvas || numOptions === 0) return;
+      if (!canvas || numOptions === 0) {
+        if (canvas) {
+          const ctx = canvas.getContext("2d");
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+        }
+        return;
+      }
       const ctx = canvas.getContext("2d");
       const centerX = canvas.width / 2;
       const centerY = canvas.height / 2;
@@ -700,7 +709,7 @@ function RouletteGame({ options, isAdmin, onSaveOptions }) {
         ctx.font = "bold 14px Georgia";
         ctx.shadowColor = "black";
         ctx.shadowBlur = 4;
-        ctx.fillText(options[i], radius - 20, 5);
+        ctx.fillText(currentOptions[i], radius - 20, 5);
         ctx.restore();
       }
       ctx.beginPath();
@@ -715,12 +724,25 @@ function RouletteGame({ options, isAdmin, onSaveOptions }) {
       ctx.lineWidth = 2;
       ctx.stroke();
     },
-    [options, numOptions, arcSize]
+    [currentOptions, numOptions, arcSize]
   );
 
   useEffect(() => {
-    drawRoulette(currentAngleRef.current);
-  }, [drawRoulette]);
+    currentAngleRef.current = 0;
+    setResult("");
+    drawRoulette(0);
+  }, [activeLevel, drawRoulette]);
+
+  function selectLevel(i) {
+    if (isSpinning) return;
+    setActiveLevel((prev) => (prev === i ? null : i));
+  }
+
+  function openEditor(target) {
+    setEditTarget(target);
+    const source = target === "base" ? options : rouletteLevels[target] || [];
+    setDraftOptions(source);
+  }
 
   function spin() {
     if (isSpinning || numOptions === 0) return;
@@ -746,12 +768,18 @@ function RouletteGame({ options, isAdmin, onSaveOptions }) {
       } else {
         currentAngleRef.current = startAngle + totalRotationNeeded;
         drawRoulette(currentAngleRef.current);
-        setResult(`Resultado: ${options[winningIndex]}`);
+        setResult(`Resultado: ${currentOptions[winningIndex]}`);
         setIsSpinning(false);
       }
     }
     requestAnimationFrame(animate);
   }
+
+  const levelButtonInfo = [
+    { key: null, label: "Nivel 1" },
+    { key: 0, label: "Nivel 2" },
+    { key: 1, label: "Nivel 3" },
+  ];
 
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
@@ -792,15 +820,51 @@ function RouletteGame({ options, isAdmin, onSaveOptions }) {
         onClick={spin}
         disabled={isSpinning || numOptions === 0}
       >
-        {isSpinning ? "GIRANDO..." : "GIRAR RULETA"}
+        {isSpinning ? "GIRANDO..." : numOptions === 0 ? "SIN OPCIONES EN ESTE NIVEL" : "GIRAR RULETA"}
       </button>
       <div className="rv-display" style={{ fontSize: 20, marginTop: 14, minHeight: 26, color: "var(--flash)" }}>
         {result}
       </div>
 
+      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", justifyContent: "center", marginTop: 10, width: "100%" }}>
+        {levelButtonInfo.map(({ key, label }) => (
+          <button
+            key={label}
+            className="rv-btn rv-btn-ghost"
+            style={{
+              width: "auto",
+              marginTop: 0,
+              flex: "1 1 120px",
+              ...(activeLevel === key
+                ? { background: "var(--accent-soft)", borderColor: "var(--accent)", color: "var(--flash)" }
+                : {}),
+            }}
+            onClick={() => selectLevel(key)}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
       {isAdmin && (
-        <div className="rv-upload-box" style={{ marginTop: 24, width: "100%" }}>
-          <div className="rv-section-title">Editar opciones de la ruleta (solo admin)</div>
+        <div style={{ display: "flex", gap: 14, flexWrap: "wrap", justifyContent: "center", marginTop: 16 }}>
+          <button className="rv-comment-toggle" onClick={() => (editTarget === "base" ? setEditTarget(null) : openEditor("base"))}>
+            {editTarget === "base" ? "ocultar edición de Nivel 1" : "✎ editar opciones de Nivel 1"}
+          </button>
+          <button className="rv-comment-toggle" onClick={() => (editTarget === 0 ? setEditTarget(null) : openEditor(0))}>
+            {editTarget === 0 ? "ocultar edición de Nivel 2" : "✎ editar opciones de Nivel 2"}
+          </button>
+          <button className="rv-comment-toggle" onClick={() => (editTarget === 1 ? setEditTarget(null) : openEditor(1))}>
+            {editTarget === 1 ? "ocultar edición de Nivel 3" : "✎ editar opciones de Nivel 3"}
+          </button>
+        </div>
+      )}
+
+      {isAdmin && editTarget !== null && (
+        <div className="rv-upload-box" style={{ marginTop: 14, width: "100%" }}>
+          <div className="rv-section-title">
+            Editar opciones de {editTarget === "base" ? "Nivel 1" : editTarget === 0 ? "Nivel 2" : "Nivel 3"} (solo admin)
+          </div>
           {draftOptions.map((opt, i) => (
             <div key={i} style={{ display: "flex", gap: 8, marginBottom: 8 }}>
               <input
@@ -835,7 +899,12 @@ function RouletteGame({ options, isAdmin, onSaveOptions }) {
               disabled={saving}
               onClick={async () => {
                 setSaving(true);
-                await onSaveOptions(draftOptions.map((o) => o.trim()).filter(Boolean));
+                const cleaned = draftOptions.map((o) => o.trim()).filter(Boolean);
+                if (editTarget === "base") {
+                  await onSaveOptions(cleaned);
+                } else {
+                  await onSaveLevel(editTarget, cleaned);
+                }
                 setSaving(false);
               }}
             >
@@ -1317,6 +1386,7 @@ function Revelado() {
   const [levelLabels, setLevelLabels] = useState(["Nivel 1", "Nivel 2", "Nivel 3"]);
   const [cardLevels, setCardLevels] = useState([[], [], []]);
   const [uploadingLevelCard, setUploadingLevelCard] = useState(null); // levelIndex or null
+  const [rouletteLevels, setRouletteLevels] = useState([[], []]); // Nivel 2, Nivel 3
 
   const isAdmin = !!(profile && profile.is_admin);
 
@@ -1458,11 +1528,15 @@ function Revelado() {
 
   const loadGameConfig = useCallback(async (token) => {
     try {
-      const data = await sbRest("game_config?id=eq.1&select=roulette_options,dice_faces,level_labels,card_levels", { token });
+      const data = await sbRest(
+        "game_config?id=eq.1&select=roulette_options,dice_faces,level_labels,card_levels,roulette_levels",
+        { token }
+      );
       setRouletteOptions(data && data[0] ? data[0].roulette_options : []);
       setDiceFaces(data && data[0] ? data[0].dice_faces || [] : []);
       setLevelLabels(data && data[0] && data[0].level_labels ? data[0].level_labels : ["Nivel 1", "Nivel 2", "Nivel 3"]);
       setCardLevels(data && data[0] && data[0].card_levels ? data[0].card_levels : [[], [], []]);
+      setRouletteLevels(data && data[0] && data[0].roulette_levels ? data[0].roulette_levels : [[], []]);
     } catch (e) {
       console.error("loadGameConfig", e);
     }
@@ -2010,6 +2084,24 @@ function Revelado() {
         body: { roulette_options: newOptions, updated_at: new Date().toISOString() },
       });
       setRouletteOptions(newOptions);
+    } catch (err) {
+      console.error(err);
+      alert("No se pudieron guardar las opciones: " + err.message);
+    }
+  }
+
+  async function handleSaveRouletteLevel(levelIndex, newOptions) {
+    if (!isAdmin || !session) return;
+    const next = rouletteLevels.map((arr) => [...arr]);
+    while (next.length < 2) next.push([]);
+    next[levelIndex] = newOptions;
+    try {
+      await sbRest("game_config?id=eq.1", {
+        method: "PATCH",
+        token: session.accessToken,
+        body: { roulette_levels: next, updated_at: new Date().toISOString() },
+      });
+      setRouletteLevels(next);
     } catch (err) {
       console.error(err);
       alert("No se pudieron guardar las opciones: " + err.message);
@@ -3531,6 +3623,8 @@ function Revelado() {
                     options={rouletteOptions}
                     isAdmin={isAdmin}
                     onSaveOptions={handleSaveRouletteOptions}
+                    rouletteLevels={rouletteLevels}
+                    onSaveLevel={handleSaveRouletteLevel}
                   />
                 ) : (
                   <DiceGame
