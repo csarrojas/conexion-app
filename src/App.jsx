@@ -658,7 +658,7 @@ function RouletteGame({ options, isAdmin, onSaveOptions, rouletteLevels, onSaveL
   const currentAngleRef = useRef(0);
   const [isSpinning, setIsSpinning] = useState(false);
   const [result, setResult] = useState("");
-  const [activeLevel, setActiveLevel] = useState(null); // null = Nivel 1 (principal), 0 = Nivel 2, 1 = Nivel 3
+  const [activeLevel, setActiveLevel] = useState(null); // null = Nivel 1 (principal), 0 = Nivel 2
   const [editTarget, setEditTarget] = useState(null); // null (cerrado) | "base" | 0 | 1
   const [draftOptions, setDraftOptions] = useState(options);
   const [saving, setSaving] = useState(false);
@@ -671,7 +671,7 @@ function RouletteGame({ options, isAdmin, onSaveOptions, rouletteLevels, onSaveL
     }
   }, [options]);
 
-  const currentOptions = activeLevel === null ? options : rouletteLevels[activeLevel] || [];
+  const currentOptions = activeLevel === null ? options : rouletteLevels;
   const numOptions = currentOptions.length;
   const arcSize = numOptions > 0 ? (2 * Math.PI) / numOptions : 0;
 
@@ -749,7 +749,7 @@ function RouletteGame({ options, isAdmin, onSaveOptions, rouletteLevels, onSaveL
 
   function openEditor(target) {
     setEditTarget(target);
-    const source = target === "base" ? options : rouletteLevels[target] || [];
+    const source = target === "base" ? options : rouletteLevels;
     setDraftOptions(source);
   }
 
@@ -787,7 +787,6 @@ function RouletteGame({ options, isAdmin, onSaveOptions, rouletteLevels, onSaveL
   const levelButtonInfo = [
     { key: null, label: "Nivel 1" },
     { key: 0, label: "Nivel 2" },
-    { key: 1, label: "Nivel 3" },
   ];
 
   return (
@@ -863,16 +862,13 @@ function RouletteGame({ options, isAdmin, onSaveOptions, rouletteLevels, onSaveL
           <button className="rv-comment-toggle" onClick={() => (editTarget === 0 ? setEditTarget(null) : openEditor(0))}>
             {editTarget === 0 ? "ocultar edición de Nivel 2" : "✎ editar opciones de Nivel 2"}
           </button>
-          <button className="rv-comment-toggle" onClick={() => (editTarget === 1 ? setEditTarget(null) : openEditor(1))}>
-            {editTarget === 1 ? "ocultar edición de Nivel 3" : "✎ editar opciones de Nivel 3"}
-          </button>
         </div>
       )}
 
       {isAdmin && editTarget !== null && (
         <div className="rv-upload-box" style={{ marginTop: 14, width: "100%" }}>
           <div className="rv-section-title">
-            Editar opciones de {editTarget === "base" ? "Nivel 1" : editTarget === 0 ? "Nivel 2" : "Nivel 3"} (solo admin)
+            Editar opciones de {editTarget === "base" ? "Nivel 1" : "Nivel 2"} (solo admin)
           </div>
           {draftOptions.map((opt, i) => (
             <div key={i} style={{ display: "flex", gap: 8, marginBottom: 8 }}>
@@ -912,7 +908,7 @@ function RouletteGame({ options, isAdmin, onSaveOptions, rouletteLevels, onSaveL
                 if (editTarget === "base") {
                   await onSaveOptions(cleaned);
                 } else {
-                  await onSaveLevel(editTarget, cleaned);
+                  await onSaveLevel(cleaned);
                 }
                 setSaving(false);
               }}
@@ -926,12 +922,12 @@ function RouletteGame({ options, isAdmin, onSaveOptions, rouletteLevels, onSaveL
   );
 }
 
-const DICE_SIDES = 12;
 
 function DiceGame({
   diceFaces,
   isAdmin,
-  onUploadFace,
+  onAddBaseCard,
+  onRemoveBaseCard,
   uploadingFace,
   levelLabels,
   onSaveLevelLabels,
@@ -957,11 +953,11 @@ function DiceGame({
     }
   }, [levelLabels]);
 
-  const activeDeck = activeLevel === null ? null : cardLevels[activeLevel] || [];
+  const activeDeck = activeLevel === null ? diceFaces || [] : cardLevels[activeLevel] || [];
 
   function roll() {
     if (rolling) return;
-    if (activeLevel !== null && activeDeck.length === 0) return;
+    if (activeDeck.length === 0) return;
     setRolling(true);
 
     let ticks = 0;
@@ -970,22 +966,12 @@ function DiceGame({
       ticks++;
       if (ticks >= maxTicks) {
         clearInterval(interval);
-        if (activeLevel === null) {
-          setResult(Math.floor(Math.random() * DICE_SIDES) + 1);
-        } else {
-          setResult(Math.floor(Math.random() * activeDeck.length));
-        }
+        setResult(Math.floor(Math.random() * activeDeck.length));
         setRolling(false);
-      } else if (activeLevel === null) {
-        setResult(Math.floor(Math.random() * DICE_SIDES) + 1);
       } else {
         setResult(Math.floor(Math.random() * activeDeck.length));
       }
     }, 100);
-  }
-
-  function faceImage(faceNumber) {
-    return diceFaces && diceFaces[faceNumber - 1] ? diceFaces[faceNumber - 1] : null;
   }
 
   function selectLevel(i) {
@@ -993,12 +979,7 @@ function DiceGame({
     setActiveLevel((prev) => (prev === i ? null : i));
   }
 
-  const img =
-    result === null
-      ? null
-      : activeLevel === null
-      ? faceImage(result)
-      : activeDeck[result] || null;
+  const img = result === null ? null : activeDeck[result] || null;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
@@ -1013,8 +994,8 @@ function DiceGame({
                   </div>
                 </div>
                 <span className="rv-card-back-msg">
-                  {activeLevel !== null && activeDeck.length === 0
-                    ? "Este nivel todavía no tiene cartas."
+                  {activeDeck.length === 0
+                    ? "Este mazo todavía no tiene cartas."
                     : 'Clic en "ELEGIR CARTA" para sacar una.'}
                 </span>
               </div>
@@ -1022,7 +1003,7 @@ function DiceGame({
               <img src={img} alt="carta" className="rv-card-image" />
             ) : (
               <span className="rv-mono" style={{ fontSize: 72, fontWeight: 700, color: "#f3e5ab" }}>
-                {activeLevel === null ? result : result + 1}
+                {result + 1}
               </span>
             )}
           </div>
@@ -1033,7 +1014,7 @@ function DiceGame({
         className="rv-btn"
         style={{ width: "auto", padding: "14px 44px", marginTop: 28, fontSize: 19 }}
         onClick={roll}
-        disabled={rolling || (activeLevel !== null && activeDeck.length === 0)}
+        disabled={rolling || activeDeck.length === 0}
       >
         {rolling ? "ELIGIENDO..." : "ELEGIR CARTA"}
       </button>
@@ -1062,7 +1043,7 @@ function DiceGame({
       {isAdmin && (
         <div style={{ display: "flex", gap: 14, flexWrap: "wrap", justifyContent: "center", marginTop: 20 }}>
           <button className="rv-comment-toggle" onClick={() => setShowEditor((v) => !v)}>
-            {showEditor ? "ocultar edición de cartas" : "🖼️ personalizar las 12 cartas del mazo principal"}
+            {showEditor ? "ocultar edición de cartas" : `🖼️ personalizar el mazo principal (${(diceFaces || []).length})`}
           </button>
           <button className="rv-comment-toggle" onClick={() => setEditingLevels((v) => !v)}>
             {editingLevels ? "ocultar edición de niveles" : "✎ editar títulos de niveles"}
@@ -1206,7 +1187,7 @@ function DiceGame({
       {isAdmin && showEditor && (
         <div className="rv-upload-box" style={{ marginTop: 14, width: "100%" }}>
           <div className="rv-section-title">
-            Una imagen por cada carta del mazo principal (1 al 12)
+            Cartas del mazo principal ({(diceFaces || []).length})
           </div>
           <div
             style={{
@@ -1215,59 +1196,75 @@ function DiceGame({
               gap: 10,
             }}
           >
-            {Array.from({ length: 12 }).map((_, i) => {
-              const faceNumber = i + 1;
-              const faceImg = faceImage(faceNumber);
-              const isUploading = uploadingFace === i;
-              return (
-                <div key={i} style={{ textAlign: "center" }}>
-                  <div
-                    style={{
-                      position: "relative",
-                      width: 64,
-                      height: 64,
-                      margin: "0 auto",
-                      borderRadius: 6,
-                      background: "var(--bg)",
-                      border: "1px solid var(--line)",
-                      overflow: "hidden",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                    }}
-                  >
-                    {isUploading ? (
-                      <span style={{ fontSize: 11, color: "var(--ink-soft)" }}>…</span>
-                    ) : faceImg ? (
-                      <img src={faceImg} alt={`carta ${faceNumber}`} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                    ) : (
-                      <span style={{ fontSize: 18, color: "var(--ink-soft)" }}>+</span>
-                    )}
-                    <input
-                      type="file"
-                      accept="image/*"
-                      disabled={isUploading}
-                      onChange={(e) => {
-                        const file = e.target.files && e.target.files[0];
-                        if (file) onUploadFace(i, file);
-                        e.target.value = "";
-                      }}
-                      style={{
-                        position: "absolute",
-                        inset: 0,
-                        width: "100%",
-                        height: "100%",
-                        opacity: 0,
-                        cursor: "pointer",
-                      }}
-                    />
-                  </div>
-                  <div className="rv-timestamp rv-mono" style={{ marginTop: 4 }}>
-                    {faceNumber}
-                  </div>
+            {(diceFaces || []).map((url, cardIdx) => (
+              <div key={cardIdx} style={{ textAlign: "center" }}>
+                <div
+                  style={{
+                    position: "relative",
+                    width: 64,
+                    height: 64,
+                    margin: "0 auto",
+                    borderRadius: 6,
+                    background: "var(--bg)",
+                    border: "1px solid var(--line)",
+                    overflow: "hidden",
+                  }}
+                >
+                  <img src={url} alt={`carta ${cardIdx + 1}`} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                 </div>
-              );
-            })}
+                <button
+                  className="rv-comment-toggle"
+                  style={{ color: "var(--accent)", fontSize: 10, padding: "2px 0" }}
+                  onClick={() => onRemoveBaseCard(cardIdx)}
+                >
+                  quitar
+                </button>
+              </div>
+            ))}
+            <div style={{ textAlign: "center" }}>
+              <div
+                style={{
+                  position: "relative",
+                  width: 64,
+                  height: 64,
+                  margin: "0 auto",
+                  borderRadius: 6,
+                  background: "var(--bg)",
+                  border: "1px dashed var(--line)",
+                  overflow: "hidden",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                {uploadingFace ? (
+                  <span style={{ fontSize: 11, color: "var(--ink-soft)" }}>…</span>
+                ) : (
+                  <span style={{ fontSize: 20, color: "var(--ink-soft)" }}>+</span>
+                )}
+                <input
+                  type="file"
+                  accept="image/*"
+                  disabled={uploadingFace}
+                  onChange={(e) => {
+                    const file = e.target.files && e.target.files[0];
+                    if (file) onAddBaseCard(file);
+                    e.target.value = "";
+                  }}
+                  style={{
+                    position: "absolute",
+                    inset: 0,
+                    width: "100%",
+                    height: "100%",
+                    opacity: 0,
+                    cursor: "pointer",
+                  }}
+                />
+              </div>
+              <div className="rv-timestamp rv-mono" style={{ marginTop: 4 }}>
+                agregar
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -1391,11 +1388,11 @@ function Revelado() {
   const [rouletteOptions, setRouletteOptions] = useState([]);
   const [gameChoice, setGameChoice] = useState("roulette"); // 'roulette' | 'dice'
   const [diceFaces, setDiceFaces] = useState([]);
-  const [uploadingFace, setUploadingFace] = useState(null);
+  const [uploadingFace, setUploadingFace] = useState(false);
   const [levelLabels, setLevelLabels] = useState(["Nivel 1", "Nivel 2", "Nivel 3"]);
   const [cardLevels, setCardLevels] = useState([[], [], []]);
   const [uploadingLevelCard, setUploadingLevelCard] = useState(null); // levelIndex or null
-  const [rouletteLevels, setRouletteLevels] = useState([[], []]); // Nivel 2, Nivel 3
+  const [rouletteLevels, setRouletteLevels] = useState([]); // opciones de Nivel 2
 
   const isAdmin = !!(profile && profile.is_admin);
 
@@ -1545,7 +1542,7 @@ function Revelado() {
       setDiceFaces(data && data[0] ? data[0].dice_faces || [] : []);
       setLevelLabels(data && data[0] && data[0].level_labels ? data[0].level_labels : ["Nivel 1", "Nivel 2", "Nivel 3"]);
       setCardLevels(data && data[0] && data[0].card_levels ? data[0].card_levels : [[], [], []]);
-      setRouletteLevels(data && data[0] && data[0].roulette_levels ? data[0].roulette_levels : [[], []]);
+      setRouletteLevels(data && data[0] && data[0].roulette_levels ? data[0].roulette_levels : []);
     } catch (e) {
       console.error("loadGameConfig", e);
     }
@@ -2099,18 +2096,15 @@ function Revelado() {
     }
   }
 
-  async function handleSaveRouletteLevel(levelIndex, newOptions) {
+  async function handleSaveRouletteLevel(newOptions) {
     if (!isAdmin || !session) return;
-    const next = rouletteLevels.map((arr) => [...arr]);
-    while (next.length < 2) next.push([]);
-    next[levelIndex] = newOptions;
     try {
       await sbRest("game_config?id=eq.1", {
         method: "PATCH",
         token: session.accessToken,
-        body: { roulette_levels: next, updated_at: new Date().toISOString() },
+        body: { roulette_levels: newOptions, updated_at: new Date().toISOString() },
       });
-      setRouletteLevels(next);
+      setRouletteLevels(newOptions);
     } catch (err) {
       console.error(err);
       alert("No se pudieron guardar las opciones: " + err.message);
@@ -2172,15 +2166,13 @@ function Revelado() {
     }
   }
 
-  async function handleUploadDiceFace(faceIndex, file) {
+  async function handleAddBaseCard(file) {
     if (!isAdmin || !session || !file) return;
-    setUploadingFace(faceIndex);
+    setUploadingFace(true);
     try {
-      const blob = await compressImageToBlob(file, 400, 0.8);
+      const blob = await compressImageToBlob(file, 500, 0.8);
       const url = await sbUpload(blob, session.accessToken, "dice");
-      const next = [...diceFaces];
-      while (next.length < 12) next.push(null);
-      next[faceIndex] = url;
+      const next = [...diceFaces, url];
       await sbRest("game_config?id=eq.1", {
         method: "PATCH",
         token: session.accessToken,
@@ -2191,7 +2183,23 @@ function Revelado() {
       console.error(err);
       alert("No se pudo subir la imagen: " + err.message);
     } finally {
-      setUploadingFace(null);
+      setUploadingFace(false);
+    }
+  }
+
+  async function handleRemoveBaseCard(cardIndex) {
+    if (!isAdmin || !session) return;
+    const next = diceFaces.filter((_, i) => i !== cardIndex);
+    setDiceFaces(next);
+    try {
+      await sbRest("game_config?id=eq.1", {
+        method: "PATCH",
+        token: session.accessToken,
+        body: { dice_faces: next, updated_at: new Date().toISOString() },
+      });
+    } catch (err) {
+      console.error(err);
+      await loadGameConfig(session.accessToken);
     }
   }
 
@@ -3639,7 +3647,8 @@ function Revelado() {
                   <DiceGame
                     diceFaces={diceFaces}
                     isAdmin={isAdmin}
-                    onUploadFace={handleUploadDiceFace}
+                    onAddBaseCard={handleAddBaseCard}
+                    onRemoveBaseCard={handleRemoveBaseCard}
                     uploadingFace={uploadingFace}
                     levelLabels={levelLabels}
                     onSaveLevelLabels={handleSaveLevelLabels}
