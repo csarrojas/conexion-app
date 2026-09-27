@@ -1900,6 +1900,7 @@ function Revelado() {
 
   async function handleDeleteComment(commentId) {
     if (!isAdmin || !session) return;
+    if (!window.confirm("¿Seguro que quieres borrar este comentario? Esta acción no se puede deshacer.")) return;
     try {
       await sbRest(`comments?id=eq.${commentId}`, { method: "DELETE", token: session.accessToken });
       await loadFeed(session.accessToken);
@@ -1910,6 +1911,7 @@ function Revelado() {
 
   async function handleBanUser(userId, username) {
     if (!isAdmin || !session || username === profile.username) return;
+    if (!window.confirm(`¿Seguro que quieres expulsar a "${username}"? No podrá volver a entrar con ese nombre.`)) return;
     setUsers((prev) => prev.filter((u) => u.id !== userId));
     try {
       await sbRest(`profiles?id=eq.${userId}`, {
@@ -1989,6 +1991,7 @@ function Revelado() {
 
   async function handleDeleteProduct(productId) {
     if (!isAdmin || !session) return;
+    if (!window.confirm("¿Seguro que quieres borrar este producto? Esta acción no se puede deshacer.")) return;
     setProducts((prev) => prev.filter((p) => p.id !== productId));
     try {
       await sbRest(`products?id=eq.${productId}`, { method: "DELETE", token: session.accessToken });
@@ -2021,6 +2024,7 @@ function Revelado() {
 
   async function handleDeleteStory(storyId) {
     if (!session) return;
+    if (!window.confirm("¿Seguro que quieres borrar este relato? Esta acción no se puede deshacer.")) return;
     setStories((prev) => prev.filter((s) => s.id !== storyId));
     try {
       await sbRest(`stories?id=eq.${storyId}`, { method: "DELETE", token: session.accessToken });
@@ -2073,6 +2077,7 @@ function Revelado() {
 
   async function handleDeleteStoryComment(commentId) {
     if (!session) return;
+    if (!window.confirm("¿Seguro que quieres borrar este comentario? Esta acción no se puede deshacer.")) return;
     try {
       await sbRest(`story_comments?id=eq.${commentId}`, { method: "DELETE", token: session.accessToken });
       await loadStories(session.accessToken);
@@ -2152,6 +2157,7 @@ function Revelado() {
 
   async function handleRemoveLevelCard(levelIndex, cardIndex) {
     if (!isAdmin || !session) return;
+    if (!window.confirm("¿Seguro que quieres quitar esta carta del nivel?")) return;
     const next = cardLevels.map((arr) => [...arr]);
     next[levelIndex].splice(cardIndex, 1);
     setCardLevels(next);
@@ -2190,6 +2196,7 @@ function Revelado() {
 
   async function handleRemoveBaseCard(cardIndex) {
     if (!isAdmin || !session) return;
+    if (!window.confirm("¿Seguro que quieres quitar esta carta del mazo principal?")) return;
     const next = diceFaces.filter((_, i) => i !== cardIndex);
     setDiceFaces(next);
     try {
