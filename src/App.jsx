@@ -1888,6 +1888,7 @@ function Revelado() {
 
   async function handleDeletePost(postId) {
     if (!isAdmin || !session) return;
+    if (!window.confirm("¿Seguro que quieres borrar esta publicación? Esta acción no se puede deshacer.")) return;
     setPosts((prev) => prev.filter((p) => p.id !== postId));
     try {
       await sbRest(`posts?id=eq.${postId}`, { method: "DELETE", token: session.accessToken });
