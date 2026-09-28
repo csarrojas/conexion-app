@@ -1496,7 +1496,7 @@ function Revelado() {
     const loadDms = useCallback(async (token, myId) => {
     try {
       const data = await sbRest(
-        `messages?select=*,sender:profiles!messages_sender_id_fkey(username),receiver:profiles!messages_receiver_id_fkey(username)&order=created_at.asc&limit=1000`,
+        `messages?select=*,sender:profiles!messages_sender_id_fkey(username),receiver:profiles!messages_receiver_id_fkey(username)&order=created_at.desc&limit=3000`,
         { token }
       );
       const grouped = {};
@@ -1504,6 +1504,9 @@ function Revelado() {
         const key = dmKey(m.sender.username, m.receiver.username);
         if (!grouped[key]) grouped[key] = [];
         grouped[key].push(m);
+      });
+      Object.keys(grouped).forEach((key) => {
+        grouped[key].sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
       });
       setDms(grouped);
     } catch (e) {
