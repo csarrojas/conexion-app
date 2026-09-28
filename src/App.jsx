@@ -1493,10 +1493,10 @@ function Revelado() {
     }
   }, []);
 
-  const loadDms = useCallback(async (token, myId) => {
+    const loadDms = useCallback(async (token, myId) => {
     try {
       const data = await sbRest(
-        `messages?select=*,sender:profiles!messages_sender_id_fkey(username),receiver:profiles!messages_receiver_id_fkey(username)&order=created_at.asc`,
+        `messages?select=*,sender:profiles!messages_sender_id_fkey(username),receiver:profiles!messages_receiver_id_fkey(username)&order=created_at.asc&limit=1000`,
         { token }
       );
       const grouped = {};
