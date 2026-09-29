@@ -1523,10 +1523,6 @@ function Revelado() {
     }
   }, []);
 
-    } catch (e) {
-      console.error("loadDms", e);
-    }
-  }, []);
   const loadFullConversation = useCallback(async (token, userA, userB) => {
     try {
       const idA = users.find((u) => u.username === userA)?.id;
