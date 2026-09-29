@@ -1513,6 +1513,21 @@ function Revelado() {
       console.error("loadDms", e);
     }
   }, []);
+  const loadFullConversation = useCallback(async (token, userA, userB) => {
+    try {
+      const idA = users.find((u) => u.username === userA)?.id;
+      const idB = users.find((u) => u.username === userB)?.id;
+      if (!idA || !idB) return;
+      const data = await sbRest(
+        `messages?select=*,sender:profiles!messages_sender_id_fkey(username),receiver:profiles!messages_receiver_id_fkey(username)&or=(and(sender_id.eq.${idA},receiver_id.eq.${idB}),and(sender_id.eq.${idB},receiver_id.eq.${idA}))&order=created_at.asc&limit=5000`,
+        { token }
+      );
+      const key = dmKey(userA, userB);
+      setDms((prev) => ({ ...prev, [key]: data || [] }));
+    } catch (e) {
+      console.error("loadFullConversation", e);
+    }
+  }, [users]);
 
   const loadProducts = useCallback(async (token) => {
     try {
@@ -2896,7 +2911,10 @@ function Revelado() {
                                 background: unread > 0 ? "rgba(227,66,52,0.08)" : "transparent",
                                 borderRadius: 4,
                               }}
-                              onClick={() => setActiveDmUser(u.username)}
+                                onClick={() => {
+                                setActiveDmUser(u.username);
+                                loadFullConversation(session.accessToken, profile.username, u.username);
+                              }}
                             >
                               <div
                                 className="rv-avatar"
@@ -3788,7 +3806,13 @@ function Revelado() {
                             className="rv-member-row"
                             key={k}
                             style={{ cursor: "pointer" }}
-                            onClick={() => setAdminActiveConvo(k)}
+
+                             onClick={() => {
+                              setAdminActiveConvo(k);
+                              const [p1, p2] = k.split("|");
+                              loadFullConversation(session.accessToken, p1, p2);
+                            }}
+
                           >
                             <div style={{ display: "flex", marginRight: 4 }}>
                               <div className="rv-avatar" style={{ background: colorForName(p1) }}>
