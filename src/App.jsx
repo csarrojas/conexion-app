@@ -1505,10 +1505,24 @@ function Revelado() {
         if (!grouped[key]) grouped[key] = [];
         grouped[key].push(m);
       });
-      Object.keys(grouped).forEach((key) => {
-        grouped[key].sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+
+      setDms((prev) => {
+        const merged = { ...prev };
+        Object.keys(grouped).forEach((key) => {
+          const byId = new Map();
+          (merged[key] || []).forEach((m) => byId.set(m.id, m));
+          grouped[key].forEach((m) => byId.set(m.id, m));
+          merged[key] = Array.from(byId.values()).sort(
+            (a, b) => new Date(a.created_at) - new Date(b.created_at)
+          );
+        });
+        return merged;
       });
-      setDms(grouped);
+    } catch (e) {
+      console.error("loadDms", e);
+    }
+  }, []);
+
     } catch (e) {
       console.error("loadDms", e);
     }
