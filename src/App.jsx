@@ -324,7 +324,7 @@ ${FONT_IMPORT}
 .rv-empty .rv-display { font-size: 28px; color: var(--ink); margin-bottom: 8px; }
 
 /* ---- Chat ---- */
-.rv-chat-wrap { display: flex; flex-direction: column; height: 480px; background: var(--bg); overflow-y: auto; }
+.rv-chat-wrap { display: flex; flex-direction: column; height: 480px; }
 .rv-chat-log {
   flex: 1; overflow-y: auto; background: var(--surface);
   border: 1px solid var(--line); border-radius: 4px 4px 0 0;
