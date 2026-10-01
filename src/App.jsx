@@ -280,6 +280,7 @@ ${FONT_IMPORT}
 .rv-frame-number { font-size: 11px; color: var(--ink-soft); }
 .rv-frame-img-wrap { background: var(--paper); padding: 10px 10px 4px; }
 .rv-frame-img { width: 100%; display: block; border-radius: 2px; background: #000; }
+.rv-protected-img { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; -webkit-user-drag: none; user-drag: none; }
 .rv-frame-caption {
   padding: 10px 4px 14px;
   font-size: 13px;
@@ -2822,12 +2823,14 @@ function Revelado() {
                             </div>
                           </div>
                           <div className="rv-frame-img-wrap">
-                            <img
-                              className="rv-frame-img"
+                           <img
+                              className="rv-frame-img rv-protected-img"
                               src={post.image_url}
                               alt={post.caption || "foto"}
                               style={{ cursor: "pointer" }}
                               onClick={() => setLightboxUrl(post.image_url)}
+                              onContextMenu={(e) => e.preventDefault()}
+                              draggable={false}
                             />
                             {post.caption && <div className="rv-frame-caption">{post.caption}</div>}
                           </div>
@@ -3918,6 +3921,9 @@ function Revelado() {
           <img
             src={lightboxUrl}
             alt="vista completa"
+            onContextMenu={(e) => e.preventDefault()}
+            draggable={false}
+            className="rv-protected-img"
             style={{
               maxWidth: "100%",
               maxHeight: "100%",
