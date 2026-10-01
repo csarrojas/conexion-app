@@ -2897,7 +2897,7 @@ function Revelado() {
             )}
 
             {view === "chat" && (
-              <div className="rv-chat-wrap">
+              <div className={activeDmUser ? "rv-chat-wrap" : ""}>
                 {!activeDmUser ? (
                   <>
                     <div className="rv-section-title">Mensajes privados</div>
