@@ -1954,6 +1954,30 @@ function Revelado() {
     }
   }
 
+  async function handleRenameUser(userId, currentUsername) {
+    if (!isAdmin || !session) return;
+    const input = window.prompt("Nuevo nombre de usuario:", currentUsername);
+    if (!input) return;
+    const clean = input.trim();
+    if (clean === currentUsername) return;
+    if (clean.length < 2 || !/^[a-zA-Z0-9_ñÑáéíóúÁÉÍÓÚ]+$/.test(clean)) {
+      alert("El nombre debe tener al menos 2 caracteres, y solo letras, números y guion bajo.");
+      return;
+    }
+    try {
+      await sbRest(`profiles?id=eq.${userId}`, {
+        method: "PATCH",
+        token: session.accessToken,
+        body: { username: clean },
+      });
+      setUsers((prev) => prev.map((u) => (u.id === userId ? { ...u, username: clean } : u)));
+      if (userId === profile.id) setProfile((p) => ({ ...p, username: clean }));
+    } catch (err) {
+      console.error(err);
+      alert("No se pudo cambiar el nombre. Es posible que ya esté en uso por otra cuenta.");
+    }
+  }
+
   async function handleToggleCanMessage(userId, currentlyCan) {
     if (!isAdmin || !session) return;
     const next = !currentlyCan;
@@ -3331,11 +3355,22 @@ function Revelado() {
                             >
                               expulsar
                             </button>
-                          )}
+                      
+			  )}
                         </div>
+                      )}
+                      {isAdmin && (
+                        <button
+                          className="rv-send-mini"
+                          style={{ marginLeft: 8 }}
+                          onClick={() => handleRenameUser(u.id, u.username)}
+                        >
+                          renombrar
+                        </button>
                       )}
                     </div>
                   ))}
+
               </div>
             )}
 
