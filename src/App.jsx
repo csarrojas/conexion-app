@@ -524,7 +524,11 @@ ${FONT_IMPORT}
 }
 `;
 
-const ACCENT_POOL = ["#e34234", "#f2c14e", "#5b8c5a", "#4d7ea8", "#a15fb0", "#c96f4a"];
+const ACCENT_POOL = [
+  "#e34234", "#f2c14e", "#5b8c5a", "#4d7ea8", "#a15fb0", "#c96f4a",
+  "#2f9e8f", "#d1495b", "#6a994e", "#9b5de5", "#118ab2", "#ef8354",
+  "#7f5539", "#386641", "#0077b6", "#bc6c25", "#5e548e", "#3a86ff",
+];
 
 function colorForName(name) {
   let hash = 0;
