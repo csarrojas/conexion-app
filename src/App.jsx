@@ -3390,7 +3390,7 @@ function Revelado() {
                               }
                               onClick={() => handleToggleCanMessage(u.id, u.can_message)}
                             >
-                              {u.can_message === false ? "permitir mensajes" : "silenciar mensajes"}
+                              {u.can_message === false ? "permitir" : "silenciar"}
                             </button>
                           )}
                           {isAdmin && (
@@ -3403,7 +3403,7 @@ function Revelado() {
                               }
                               onClick={() => handleToggleSeeImages(u.id, u.can_see_images !== false)}
                             >
-                              {u.can_see_images === false ? "mostrar imágenes" : "difuminar imágenes"}
+                              {u.can_see_images === false ? "mostrar" : "difuminar"}
                             </button>
                           )}
                           {isAdmin && (
