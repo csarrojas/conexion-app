@@ -6,7 +6,7 @@ const SUPABASE_ANON_KEY =
 
 // Shared secret required to register at all. Change and share only with
 // people you invite.
-const COMMUNITY_CODE = "OSCURO2026";
+const COMMUNITY_CODE = "OCTUBRE2026";
 
 const FONT_IMPORT = `@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Space+Mono:wght@400;700&family=Inter:wght@400;500;600&display=swap');`;
 
