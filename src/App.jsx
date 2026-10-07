@@ -281,6 +281,7 @@ ${FONT_IMPORT}
 .rv-frame-img-wrap { background: var(--paper); padding: 10px 10px 4px; }
 .rv-frame-img { width: 100%; display: block; border-radius: 2px; background: #000; }
 .rv-protected-img { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; -webkit-user-drag: none; user-drag: none; }
+.rv-blurred { filter: blur(28px) brightness(0.7); opacity: 0.55; transform: scale(1.15); pointer-events: none; }
 .rv-frame-caption {
   padding: 10px 4px 14px;
   font-size: 13px;
@@ -1400,6 +1401,7 @@ function Revelado() {
   const [rouletteLevels, setRouletteLevels] = useState([]); // opciones de Nivel 2
 
   const isAdmin = !!(profile && profile.is_admin);
+  const imagesBlocked = !isAdmin && !!profile && profile.can_see_images === false;
 
   // Detect a Supabase password-recovery link (#access_token=...&type=recovery)
   useEffect(() => {
@@ -1482,7 +1484,7 @@ function Revelado() {
   const loadUsers = useCallback(async (token) => {
     try {
       const data = await sbRest(
-        "profiles?select=id,username,is_admin,banned,created_at,avatar_url,verified,can_message&banned=eq.false&order=created_at.asc",
+        "profiles?select=id,username,is_admin,banned,created_at,avatar_url,verified,can_message,can_see_images&banned=eq.false&order=created_at.asc",
         { token }
       );
       setUsers(data || []);
@@ -1490,8 +1492,17 @@ function Revelado() {
         if (!prev) return prev;
         const mine = (data || []).find((u) => u.id === prev.id);
         if (!mine) return prev;
-        if (mine.verified === prev.verified && mine.can_message === prev.can_message) return prev;
-        return { ...prev, verified: mine.verified, can_message: mine.can_message };
+        if (
+          mine.verified === prev.verified &&
+          mine.can_message === prev.can_message &&
+          mine.can_see_images === prev.can_see_images
+        ) return prev;
+        return {
+          ...prev,
+          verified: mine.verified,
+          can_message: mine.can_message,
+          can_see_images: mine.can_see_images,
+        };
       });
     } catch (e) {
       console.error("loadUsers", e);
@@ -1991,6 +2002,22 @@ function Revelado() {
         method: "PATCH",
         token: session.accessToken,
         body: { can_message: next },
+      });
+    } catch (err) {
+      console.error(err);
+      await loadUsers(session.accessToken);
+    }
+  }
+
+  async function handleToggleSeeImages(userId, currentlyCan) {
+    if (!isAdmin || !session) return;
+    const next = !currentlyCan;
+    setUsers((prev) => prev.map((u) => (u.id === userId ? { ...u, can_see_images: next } : u)));
+    try {
+      await sbRest(`profiles?id=eq.${userId}`, {
+        method: "PATCH",
+        token: session.accessToken,
+        body: { can_see_images: next },
       });
     } catch (err) {
       console.error(err);
@@ -2758,6 +2785,11 @@ function Revelado() {
           <div className="rv-main">
             {view === "feed" && (
               <>
+                {imagesBlocked && (
+                  <div className="rv-note" style={{ marginBottom: 12 }}>
+                    Tus imágenes están difuminadas. Publica una foto para que el administrador las habilite.
+                  </div>
+                )}
                 <div className="rv-upload-box">
                   <div className="rv-upload-row">
                     <div className="rv-upload-preview">
@@ -2850,13 +2882,18 @@ function Revelado() {
                               )}
                             </div>
                           </div>
-                          <div className="rv-frame-img-wrap">
+                          <div
+                            className="rv-frame-img-wrap"
+                            style={imagesBlocked ? { overflow: "hidden" } : undefined}
+                          >
                            <img
-                              className="rv-frame-img rv-protected-img"
+                              className={`rv-frame-img rv-protected-img ${imagesBlocked ? "rv-blurred" : ""}`}
                               src={post.image_url}
                               alt={post.caption || "foto"}
-                              style={{ cursor: "pointer" }}
-                              onClick={() => setLightboxUrl(post.image_url)}
+                              style={{ cursor: imagesBlocked ? "default" : "pointer" }}
+                              onClick={() => {
+                                if (!imagesBlocked) setLightboxUrl(post.image_url);
+                              }}
                               onContextMenu={(e) => e.preventDefault()}
                               draggable={false}
                             />
@@ -3323,6 +3360,11 @@ function Revelado() {
                                 🔇
                               </span>
                             )}
+                            {isAdmin && u.can_see_images === false && (
+                              <span title="Imágenes difuminadas" style={{ marginLeft: 6, fontSize: 12 }}>
+                                🌫️
+                              </span>
+                            )}
                           </div>
                           <div className="rv-member-joined rv-mono">se unió {timeAgo(u.created_at)}</div>
                         </div>
@@ -3349,6 +3391,19 @@ function Revelado() {
                               onClick={() => handleToggleCanMessage(u.id, u.can_message)}
                             >
                               {u.can_message === false ? "permitir mensajes" : "silenciar mensajes"}
+                            </button>
+                          )}
+                          {isAdmin && (
+                            <button
+                              className="rv-send-mini"
+                              style={
+                                u.can_see_images === false
+                                  ? { color: "var(--flash)", borderColor: "var(--accent-soft)" }
+                                  : {}
+                              }
+                              onClick={() => handleToggleSeeImages(u.id, u.can_see_images !== false)}
+                            >
+                              {u.can_see_images === false ? "mostrar imágenes" : "difuminar imágenes"}
                             </button>
                           )}
                           {isAdmin && (
@@ -3546,8 +3601,11 @@ function Revelado() {
                             <img
                               src={p.image_url}
                               alt={p.caption || "foto"}
-                              style={{ width: "100%", height: "100%", objectFit: "cover", display: "block", cursor: "pointer" }}
-                              onClick={() => setLightboxUrl(p.image_url)}
+                              className={imagesBlocked ? "rv-blurred" : undefined}
+                              style={{ width: "100%", height: "100%", objectFit: "cover", display: "block", cursor: imagesBlocked ? "default" : "pointer" }}
+                              onClick={() => {
+                                if (!imagesBlocked) setLightboxUrl(p.image_url);
+                              }}
                             />
                           </div>
                         ))}
