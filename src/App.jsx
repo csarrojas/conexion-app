@@ -8,6 +8,11 @@ const SUPABASE_ANON_KEY =
 // people you invite.
 const COMMUNITY_CODE = "OCTUBRE2026";
 
+// Aviso de novedad con imagen: pega aquí el enlace de la imagen subida a Storage.
+// Mientras esté vacío, el aviso no se muestra.
+const NOTICE_ID = "aviso-imagenes-temporales";
+const NOTICE_IMAGE_URL = "";
+
 const FONT_IMPORT = `@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Space+Mono:wght@400;700&family=Inter:wght@400;500;600&display=swap');`;
 
 const STYLES = `
@@ -629,7 +634,7 @@ function dmKey(a, b) {
   return [a, b].sort().join("|");
 }
 
-const DM_VIEW_SECONDS = 60;
+const DM_VIEW_SECONDS = 30;
 
 function DmImage({ m, isSender, alwaysVisible, onOpen, onLoad }) {
   const [now, setNow] = useState(Date.now());
@@ -701,7 +706,7 @@ function DmImage({ m, isSender, alwaysVisible, onOpen, onLoad }) {
           setBusy(false);
         }}
       >
-        📷 Toca para ver · 1 min
+        📷 Toca para ver · 30 s
       </button>
     );
   }
@@ -1436,6 +1441,24 @@ function Revelado() {
   const avatarEditInputRef = useRef(null);
 
   const [lightboxUrl, setLightboxUrl] = useState(null);
+  const [showNotice, setShowNotice] = useState(false);
+  const [noticeLoaded, setNoticeLoaded] = useState(false);
+
+  useEffect(() => {
+    if (!NOTICE_IMAGE_URL || !session || !profile) return;
+    try {
+      if (localStorage.getItem(`rv_notice_${NOTICE_ID}_${profile.id}`) !== "1") setShowNotice(true);
+    } catch (e) {
+      setShowNotice(true);
+    }
+  }, [session, profile?.id]);
+
+  function closeNotice() {
+    setShowNotice(false);
+    try {
+      localStorage.setItem(`rv_notice_${NOTICE_ID}_${profile.id}`, "1");
+    } catch (e) {}
+  }
 
   const [verifications, setVerifications] = useState([]);
   const [adminPanel, setAdminPanel] = useState("conversations"); // 'conversations' | 'verification'
@@ -1457,6 +1480,7 @@ function Revelado() {
   const [dmDraft, setDmDraft] = useState("");
   const [dmImagePreview, setDmImagePreview] = useState(null);
   const [dmImageBlob, setDmImageBlob] = useState(null);
+  const [dmTemporary, setDmTemporary] = useState(false);
   const chatLogRef = useRef(null);
   const dmFileInputRef = useRef(null);
 
@@ -2467,6 +2491,8 @@ function Revelado() {
     if (!otherUser) return;
     setDmDraft("");
     const blobToSend = dmImageBlob;
+    const sendTemporary = dmTemporary;
+    setDmTemporary(false);
     setDmImagePreview(null);
     setDmImageBlob(null);
     if (dmFileInputRef.current) dmFileInputRef.current.value = "";
@@ -2478,7 +2504,7 @@ function Revelado() {
       await sbRest("messages", {
         method: "POST",
         token: session.accessToken,
-        body: { sender_id: profile.id, receiver_id: otherUser.id, text, image_url: imageUrl, view_once: !!imageUrl },
+        body: { sender_id: profile.id, receiver_id: otherUser.id, text, image_url: imageUrl, view_once: !!imageUrl && sendTemporary },
       });
       await loadDms(session.accessToken, profile.id);
     } catch (err) {
@@ -3189,19 +3215,52 @@ async function handleOpenDmImage(m) {
                           padding: 8,
                         }}
                       >
-                        <img
-                          src={dmImagePreview}
-                          alt="preview"
-                          style={{ width: 44, height: 44, objectFit: "cover", borderRadius: 4 }}
-                        />
-                        <span style={{ fontSize: 12, color: "var(--ink-soft)", flex: 1 }}>
-                          Imagen lista para enviar
+                        <span style={{ position: "relative", display: "inline-block", flexShrink: 0 }}>
+                          <img
+                            src={dmImagePreview}
+                            alt="preview"
+                            style={{ width: 44, height: 44, objectFit: "cover", borderRadius: 4, display: "block" }}
+                          />
+                          {dmTemporary && (
+                            <span
+                              style={{
+                                position: "absolute",
+                                right: -6,
+                                bottom: -6,
+                                width: 18,
+                                height: 18,
+                                borderRadius: "50%",
+                                background: "var(--accent)",
+                                color: "#fff",
+                                fontSize: 11,
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                              }}
+                            >
+                              ⏱
+                            </span>
+                          )}
                         </span>
+                        <span style={{ fontSize: 12, color: "var(--ink-soft)", flex: 1 }}>
+                          {dmTemporary
+                            ? "Temporal: se podrá ver una vez, durante 30 segundos"
+                            : "Permanente: quedará visible en el chat"}
+                        </span>
+                        <button
+                          type="button"
+                          className="rv-comment-toggle"
+                          style={dmTemporary ? { color: "var(--accent)" } : {}}
+                          onClick={() => setDmTemporary((v) => !v)}
+                        >
+                          {dmTemporary ? "⏱ temporal ✓" : "⏱ hacer temporal"}
+                        </button>
                         <button
                           className="rv-comment-toggle"
                           onClick={() => {
                             setDmImagePreview(null);
                             setDmImageBlob(null);
+                            setDmTemporary(false);
                             if (dmFileInputRef.current) dmFileInputRef.current.value = "";
                           }}
                         >
@@ -4079,11 +4138,18 @@ async function handleOpenDmImage(m) {
                             <span className="rv-chat-time rv-mono">{timeAgo(m.created_at)}</span>
                           </div>
                           {m.image_url && (
-                            <img
-                              src={m.image_url}
-                              alt="imagen adjunta"
-                              style={{ maxWidth: "60%", borderRadius: 6, marginTop: 4, border: "1px solid var(--line)" }}
-                            />
+                            <>
+                              <img
+                                src={m.image_url}
+                                alt="imagen adjunta"
+                                style={{ maxWidth: "60%", borderRadius: 6, marginTop: 4, border: "1px solid var(--line)" }}
+                              />
+                              {m.view_once && (
+                                <div style={{ fontSize: 11, color: "var(--accent)", marginTop: 2 }}>
+                                  ⏱ imagen temporal · {m.image_opened_at ? "abierta" : "sin abrir"}
+                                </div>
+                              )}
+                            </>
                           )}
                         </div>
                       ))}
@@ -4099,6 +4165,51 @@ async function handleOpenDmImage(m) {
               </div>
             )}
           </div>
+        </div>
+      )}
+
+      {showNotice && NOTICE_IMAGE_URL && session && profile && (
+        <div
+          onClick={closeNotice}
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(10,11,14,0.88)",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1100,
+            padding: 20,
+            gap: 14,
+            opacity: noticeLoaded ? 1 : 0,
+            transition: "opacity 0.25s",
+          }}
+        >
+          <img
+            src={NOTICE_IMAGE_URL}
+            alt="Aviso"
+            draggable={false}
+            onLoad={() => setNoticeLoaded(true)}
+            onError={() => setShowNotice(false)}
+            style={{
+              maxWidth: "100%",
+              maxHeight: "80vh",
+              objectFit: "contain",
+              borderRadius: 8,
+              boxShadow: "0 10px 40px rgba(0,0,0,0.5)",
+            }}
+          />
+          <button
+            className="rv-btn"
+            style={{ width: "auto", marginTop: 0, padding: "0 28px" }}
+            onClick={(e) => {
+              e.stopPropagation();
+              closeNotice();
+            }}
+          >
+            CERRAR
+          </button>
         </div>
       )}
 
