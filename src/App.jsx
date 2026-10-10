@@ -629,6 +629,93 @@ function dmKey(a, b) {
   return [a, b].sort().join("|");
 }
 
+const DM_VIEW_SECONDS = 60;
+
+function DmImage({ m, isSender, alwaysVisible, onOpen, onLoad }) {
+  const [now, setNow] = useState(Date.now());
+  const [busy, setBusy] = useState(false);
+  const openedMs = m.image_opened_at ? new Date(m.image_opened_at).getTime() : null;
+  const remaining =
+    openedMs === null
+      ? null
+      : Math.max(0, Math.min(DM_VIEW_SECONDS, DM_VIEW_SECONDS - Math.floor((now - openedMs) / 1000)));
+  const ticking = remaining !== null && remaining > 0;
+
+  useEffect(() => {
+    if (!ticking) return;
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [ticking]);
+
+  const chip = {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 6,
+    marginTop: 4,
+    padding: "8px 12px",
+    borderRadius: 6,
+    border: "1px solid var(--line)",
+    background: "var(--surface-2)",
+    fontSize: 13,
+    color: "var(--ink-soft)",
+  };
+  const imgEl = (
+    <img
+      className="rv-protected-img"
+      src={m.image_url}
+      alt="imagen adjunta"
+      onLoad={onLoad}
+      onContextMenu={(e) => e.preventDefault()}
+      draggable={false}
+      style={{ maxWidth: "70%", borderRadius: 6, marginTop: 4, border: "1px solid var(--line)" }}
+    />
+  );
+
+  // Mensajes anteriores a este cambio: se ven normal
+  if (!m.view_once) return imgEl;
+  // Admin: siempre la ve
+  if (alwaysVisible) {
+    return (
+      <>
+        {imgEl}
+        <div style={{ fontSize: 11, color: "var(--ink-soft)", marginTop: 2 }}>👁 imagen de un solo vistazo</div>
+      </>
+    );
+  }
+  // Remitente: solo un ícono
+  if (isSender) {
+    return <div style={chip}>📷 Imagen enviada · {m.image_opened_at ? "abierta" : "sin abrir"}</div>;
+  }
+  // Destinatario
+  if (remaining === null) {
+    return (
+      <button
+        type="button"
+        className="rv-comment-toggle"
+        style={{ ...chip, cursor: "pointer" }}
+        disabled={busy}
+        onClick={async () => {
+          setBusy(true);
+          await onOpen(m);
+          setNow(Date.now());
+          setBusy(false);
+        }}
+      >
+        📷 Toca para ver · 1 min
+      </button>
+    );
+  }
+  if (remaining > 0) {
+    return (
+      <>
+        {imgEl}
+        <div style={{ fontSize: 12, color: "var(--accent)", marginTop: 4 }}>⏱ Se cierra en {remaining} s</div>
+      </>
+    );
+  }
+  return <div style={chip}>📷 Imagen vista · ya no está disponible</div>;
+}
+
 function AvatarCircle({ username, avatarUrl, size = 26, ring, onClick }) {
   const commonStyle = {
     width: size,
@@ -2391,7 +2478,7 @@ function Revelado() {
       await sbRest("messages", {
         method: "POST",
         token: session.accessToken,
-        body: { sender_id: profile.id, receiver_id: otherUser.id, text, image_url: imageUrl },
+        body: { sender_id: profile.id, receiver_id: otherUser.id, text, image_url: imageUrl, view_once: !!imageUrl },
       });
       await loadDms(session.accessToken, profile.id);
     } catch (err) {
@@ -2399,6 +2486,20 @@ function Revelado() {
     }
   }
 
+async function handleOpenDmImage(m) {
+  if (!session || !profile || m.image_opened_at) return;
+  try {
+    await sbRest(`messages?id=eq.${m.id}&receiver_id=eq.${profile.id}&image_opened_at=is.null`, {
+      method: "PATCH",
+      token: session.accessToken,
+      body: { image_opened_at: new Date().toISOString() },
+    });
+    await loadDms(session.accessToken, profile.id);
+  } catch (err) {
+    console.error(err);
+  }
+}
+	
   const frameCount = posts.length;
 
   return (
@@ -3064,14 +3165,15 @@ function Revelado() {
                             {m.text && <span>{m.text}</span>}
                             <span className="rv-chat-time rv-mono">{timeAgo(m.created_at)}</span>
                           </div>
-                          {m.image_url && (
-                            <img
-                              src={m.image_url}
-                              alt="imagen adjunta"
-                              onLoad={maybeScrollChatToBottom}
-                              style={{ maxWidth: "70%", borderRadius: 6, marginTop: 4, border: "1px solid var(--line)" }}
-                            />
-                          )}
+                         {m.image_url && (
+ 							 <DmImage
+   							 	m={m}
+    							isSender={m.sender.username === profile.username}
+    							alwaysVisible={isAdmin}
+   								onOpen={handleOpenDmImage}
+    							onLoad={maybeScrollChatToBottom}
+ 							 />
+							)}
                         </div>
                       ))}
                     </div>
