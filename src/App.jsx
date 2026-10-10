@@ -634,7 +634,7 @@ function dmKey(a, b) {
   return [a, b].sort().join("|");
 }
 
-const DM_VIEW_SECONDS = 30;
+const DM_VIEW_SECONDS = 10;
 
 function DmImage({ m, isSender, alwaysVisible, onOpen, onLoad }) {
   const [now, setNow] = useState(Date.now());
@@ -706,7 +706,7 @@ function DmImage({ m, isSender, alwaysVisible, onOpen, onLoad }) {
           setBusy(false);
         }}
       >
-        📷 Toca para ver · 30 s
+        📷 Toca para ver · 10 s
       </button>
     );
   }
@@ -3244,7 +3244,7 @@ async function handleOpenDmImage(m) {
                         </span>
                         <span style={{ fontSize: 12, color: "var(--ink-soft)", flex: 1 }}>
                           {dmTemporary
-                            ? "Temporal: se podrá ver una vez, durante 30 segundos"
+                            ? "Temporal: se podrá ver una vez, durante 10 segundos"
                             : "Permanente: quedará visible en el chat"}
                         </span>
                         <button
