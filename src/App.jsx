@@ -651,8 +651,18 @@ function DmImage({ m, isSender, alwaysVisible, onOpen, onLoad }) {
     const id = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(id);
   }, [ticking]);
-
-  const chip = {
+  
+	// Si el admin es el destinatario, su vista cuenta como "abierta"
+const autoMarked = useRef(false);
+useEffect(() => {
+  if (autoMarked.current) return;
+  if (m.view_once && alwaysVisible && !isSender && !m.image_opened_at) {
+    autoMarked.current = true;
+    onOpen(m);
+  }
+}, [m.view_once, m.image_opened_at, alwaysVisible, isSender]);
+  
+	const chip = {
     display: "inline-flex",
     alignItems: "center",
     gap: 6,
