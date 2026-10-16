@@ -731,6 +731,203 @@ useEffect(() => {
   return <div style={chip}>📷 Imagen vista · ya no está disponible</div>;
 }
 
+function LightboxViewer({ urls, startIndex = 0, onClose }) {
+  const [index, setIndex] = useState(startIndex);
+  const [dragX, setDragX] = useState(0);
+  const [dragging, setDragging] = useState(false);
+  const startX = useRef(null);
+  const startY = useRef(null);
+  const lastDx = useRef(0);
+  const swiping = useRef(false);
+  const justSwiped = useRef(false);
+  const total = urls.length;
+
+  const go = useCallback(
+    (dir) => setIndex((i) => Math.min(total - 1, Math.max(0, i + dir))),
+    [total]
+  );
+
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key === "ArrowRight") go(1);
+      else if (e.key === "ArrowLeft") go(-1);
+      else if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [go, onClose]);
+
+  function onTouchStart(e) {
+    const t = e.touches[0];
+    startX.current = t.clientX;
+    startY.current = t.clientY;
+    lastDx.current = 0;
+    swiping.current = false;
+    setDragging(true);
+  }
+
+  function onTouchMove(e) {
+    if (startX.current === null) return;
+    const t = e.touches[0];
+    const dx = t.clientX - startX.current;
+    const dy = t.clientY - startY.current;
+    if (!swiping.current && Math.abs(dx) > 8 && Math.abs(dx) > Math.abs(dy)) swiping.current = true;
+    if (!swiping.current) return;
+    // resistencia en la primera y la última foto
+    const atEdge = (index === 0 && dx > 0) || (index === total - 1 && dx < 0);
+    const d = atEdge ? dx / 3 : dx;
+    lastDx.current = d;
+    setDragX(d);
+  }
+
+  function onTouchEnd() {
+    if (startX.current === null) return;
+    const dx = lastDx.current;
+    const wasSwiping = swiping.current;
+    startX.current = null;
+    swiping.current = false;
+    setDragging(false);
+    setDragX(0);
+    if (wasSwiping) {
+      justSwiped.current = true;
+      setTimeout(() => {
+        justSwiped.current = false;
+      }, 350);
+      if (Math.abs(dx) > 60) go(dx < 0 ? 1 : -1);
+    }
+  }
+
+  const arrowStyle = {
+    position: "absolute",
+    top: "50%",
+    transform: "translateY(-50%)",
+    background: "rgba(255,255,255,0.1)",
+    border: "1px solid rgba(255,255,255,0.3)",
+    color: "#fff",
+    width: 40,
+    height: 40,
+    borderRadius: "50%",
+    fontSize: 22,
+    cursor: "pointer",
+    zIndex: 2,
+  };
+
+  return (
+    <div
+      onClick={() => {
+        if (!justSwiped.current) onClose();
+      }}
+      onTouchStart={onTouchStart}
+      onTouchMove={onTouchMove}
+      onTouchEnd={onTouchEnd}
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "rgba(10,11,14,0.94)",
+        zIndex: 1000,
+        overflow: "hidden",
+        touchAction: "pan-y",
+      }}
+    >
+      {[index - 1, index, index + 1]
+        .filter((i) => i >= 0 && i < total)
+        .map((i) => (
+          <div
+            key={i}
+            style={{
+              position: "absolute",
+              inset: 0,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: 20,
+              transform: `translateX(calc(${(i - index) * 100}% + ${dragX}px))`,
+              transition: dragging ? "none" : "transform 0.25s ease",
+              pointerEvents: "none",
+            }}
+          >
+            <img
+              src={urls[i]}
+              alt="vista completa"
+              className="rv-protected-img"
+              draggable={false}
+              onContextMenu={(e) => e.preventDefault()}
+              style={{
+                maxWidth: "100%",
+                maxHeight: "100%",
+                objectFit: "contain",
+                borderRadius: 4,
+                boxShadow: "0 10px 40px rgba(0,0,0,0.5)",
+              }}
+            />
+          </div>
+        ))}
+
+      {total > 1 && (
+        <div
+          style={{
+            position: "absolute",
+            top: 22,
+            left: 18,
+            color: "#fff",
+            fontSize: 13,
+            opacity: 0.8,
+            zIndex: 2,
+          }}
+        >
+          {index + 1} / {total}
+        </div>
+      )}
+
+      {index > 0 && (
+        <button
+          style={{ ...arrowStyle, left: 10 }}
+          onClick={(e) => {
+            e.stopPropagation();
+            go(-1);
+          }}
+        >
+          ‹
+        </button>
+      )}
+      {index < total - 1 && (
+        <button
+          style={{ ...arrowStyle, right: 10 }}
+          onClick={(e) => {
+            e.stopPropagation();
+            go(1);
+          }}
+        >
+          ›
+        </button>
+      )}
+
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          onClose();
+        }}
+        style={{
+          position: "absolute",
+          top: 18,
+          right: 18,
+          background: "rgba(255,255,255,0.1)",
+          border: "1px solid rgba(255,255,255,0.3)",
+          color: "#fff",
+          width: 36,
+          height: 36,
+          borderRadius: "50%",
+          fontSize: 18,
+          cursor: "pointer",
+          zIndex: 2,
+        }}
+      >
+        ✕
+      </button>
+    </div>
+  );
+}
+
 function AvatarCircle({ username, avatarUrl, size = 26, ring, onClick }) {
   const commonStyle = {
     width: size,
@@ -1451,6 +1648,7 @@ function Revelado() {
   const avatarEditInputRef = useRef(null);
 
   const [lightboxUrl, setLightboxUrl] = useState(null);
+  const [lightboxAlbum, setLightboxAlbum] = useState(null);
   const [showNotice, setShowNotice] = useState(false);
   const [noticeLoaded, setNoticeLoaded] = useState(false);
 
@@ -3775,8 +3973,12 @@ async function handleOpenDmImage(m) {
                               className={imagesBlocked ? "rv-blurred" : undefined}
                               style={{ width: "100%", height: "100%", objectFit: "cover", display: "block", cursor: imagesBlocked ? "default" : "pointer" }}
                               onClick={() => {
-                                if (!imagesBlocked) setLightboxUrl(p.image_url);
-                              }}
+  				if (!imagesBlocked)
+   				   setLightboxAlbum({
+      					urls: albumPosts.map((x) => x.image_url),
+      					index: albumPosts.findIndex((x) => x.id === p.id),
+    					});
+				}}
                             />
                           </div>
                         ))}
@@ -4222,6 +4424,14 @@ async function handleOpenDmImage(m) {
           </button>
         </div>
       )}
+	
+	{lightboxAlbum && (
+  	<LightboxViewer
+    	urls={lightboxAlbum.urls}
+   	 startIndex={lightboxAlbum.index}
+   	 onClose={() => setLightboxAlbum(null)}
+  	/>
+	)}	
 
       {lightboxUrl && (
         <div
