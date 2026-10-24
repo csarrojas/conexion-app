@@ -4336,7 +4336,7 @@ async function handleOpenDmImage(m) {
                       {adminActiveConvo.split("|").join(" ↔ ")}
                     </div>
                     <div className="rv-chat-log" style={{ maxHeight: 420 }}>
-                      {(dms[adminActiveConvo] || []).map((m) => (
+                      {[...(dms[adminActiveConvo] || [])].reverse().map((m) => (
                         <div
                           className="rv-chat-msg"
                           key={m.id}
