@@ -3016,7 +3016,7 @@ async function handleOpenDmImage(m) {
                   <input
                     className="rv-input"
                     type="password"
-                    placeholder="Solicítalo en somosconexionsw@gmail.com"
+                    placeholder="Código: OCTUBRE2026"
                     value={codeInput}
                     onChange={(e) => setCodeInput(e.target.value)}
                     onKeyDown={(e) => {
