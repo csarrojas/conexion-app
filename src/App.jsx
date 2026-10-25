@@ -630,6 +630,12 @@ async function sbUpload(file, token, folder) {
   return `${SUPABASE_URL}/storage/v1/object/public/revelado-images/${path}`;
 }
 
+// Si los datos recibidos son idénticos a los que ya hay, conserva los actuales
+// y así React no vuelve a dibujar la app sin necesidad.
+function keepIfSame(prev, next) {
+  return JSON.stringify(prev) === JSON.stringify(next) ? prev : next;
+}
+
 function dmKey(a, b) {
   return [a, b].sort().join("|");
 }
@@ -1794,7 +1800,7 @@ function Revelado() {
         "posts?select=*,author:profiles(username,avatar_url,verified),comments(id,text,created_at,author:profiles(username))&order=created_at.desc",
         { token }
       );
-      setPosts(data || []);
+      setPosts((prev) => keepIfSame(prev, data || []));
     } catch (e) {
       console.error("loadFeed", e);
     }
@@ -1806,7 +1812,7 @@ function Revelado() {
         "profiles?select=id,username,is_admin,banned,created_at,avatar_url,verified,can_message,can_see_images&banned=eq.false&order=created_at.asc",
         { token }
       );
-      setUsers(data || []);
+      setUsers((prev) => keepIfSame(prev, data || []));
       setProfile((prev) => {
         if (!prev) return prev;
         const mine = (data || []).find((u) => u.id === prev.id);
@@ -1851,7 +1857,7 @@ function Revelado() {
             (a, b) => new Date(a.created_at) - new Date(b.created_at)
           );
         });
-        return merged;
+        return keepIfSame(prev, merged);
       });
     } catch (e) {
       console.error("loadDms", e);
@@ -1877,7 +1883,7 @@ function Revelado() {
   const loadProducts = useCallback(async (token) => {
     try {
       const data = await sbRest("products?select=*&order=created_at.desc", { token });
-      setProducts(data || []);
+      setProducts((prev) => keepIfSame(prev, data || []));
     } catch (e) {
       console.error("loadProducts", e);
     }
@@ -1889,7 +1895,7 @@ function Revelado() {
         "stories?select=*,author:profiles(username,avatar_url,verified),reactions:story_reactions(id,type,user_id),comments:story_comments(id,text,created_at,author:profiles(username))&order=created_at.desc",
         { token }
       );
-      setStories(data || []);
+      setStories((prev) => keepIfSame(prev, data || []));
     } catch (e) {
       console.error("loadStories", e);
     }
@@ -1901,11 +1907,13 @@ function Revelado() {
         "game_config?id=eq.1&select=roulette_options,dice_faces,level_labels,card_levels,roulette_levels",
         { token }
       );
-      setRouletteOptions(data && data[0] ? data[0].roulette_options : []);
-      setDiceFaces(data && data[0] ? data[0].dice_faces || [] : []);
-      setLevelLabels(data && data[0] && data[0].level_labels ? data[0].level_labels : ["Nivel 1", "Nivel 2", "Nivel 3"]);
-      setCardLevels(data && data[0] && data[0].card_levels ? data[0].card_levels : [[], [], []]);
-      setRouletteLevels(data && data[0] && data[0].roulette_levels ? data[0].roulette_levels : []);
+      setRouletteOptions((prev) => keepIfSame(prev, data && data[0] ? data[0].roulette_options : []));
+      setDiceFaces((prev) => keepIfSame(prev, data && data[0] ? data[0].dice_faces || [] : []));
+      setLevelLabels((prev) =>
+        keepIfSame(prev, data && data[0] && data[0].level_labels ? data[0].level_labels : ["Nivel 1", "Nivel 2", "Nivel 3"])
+      );
+      setCardLevels((prev) => keepIfSame(prev, data && data[0] && data[0].card_levels ? data[0].card_levels : [[], [], []]));
+      setRouletteLevels((prev) => keepIfSame(prev, data && data[0] && data[0].roulette_levels ? data[0].roulette_levels : []));
     } catch (e) {
       console.error("loadGameConfig", e);
     }
@@ -1917,7 +1925,7 @@ function Revelado() {
         "verifications?select=*,profile:profiles!verifications_user_id_fkey(username,avatar_url,banned)&order=created_at.desc",
         { token }
       );
-      setVerifications(data || []);
+      setVerifications((prev) => keepIfSame(prev, data || []));
     } catch (e) {
       console.error("loadVerifications", e);
     }
@@ -1926,7 +1934,8 @@ function Revelado() {
   const loadMyVerification = useCallback(async (token, myId) => {
     try {
       const data = await sbRest(`verifications?user_id=eq.${myId}&select=verified,photo_url`, { token });
-      setMyVerification(data && data[0] ? data[0] : false);
+      const nextMine = data && data[0] ? data[0] : false;
+      setMyVerification((prev) => keepIfSame(prev, nextMine));
     } catch (e) {
       console.error("loadMyVerification", e);
     }
@@ -1955,10 +1964,49 @@ function Revelado() {
 
   useEffect(() => {
     if (!session || !profile) return;
-    loadAll(session.accessToken, profile.id, profile.is_admin);
-    const id = setInterval(() => loadAll(session.accessToken, profile.id, profile.is_admin), 5000);
+    const token = session.accessToken;
+    const myId = profile.id;
+    const admin = profile.is_admin;
+    loadAll(token, myId, admin);
+    let tick = 0;
+    const id = setInterval(() => {
+      // En segundo plano no se consulta nada
+      if (document.visibilityState === "hidden") return;
+      tick += 1;
+      if (tick % 4 === 0) {
+        // Cada 20 s: todo (incluye productos, juego y verificaciones)
+        loadAll(token, myId, admin);
+      } else {
+        // Cada 5 s: lo que cambia seguido
+        Promise.all([
+          loadFeed(token),
+          loadUsers(token),
+          loadDms(token, myId),
+          loadStories(token),
+          loadMyVerification(token, myId),
+        ]);
+      }
+    }, 5000);
+    // Al volver a la app se actualiza todo de inmediato
+    const onVisible = () => {
+      if (document.visibilityState === "visible") {
+        tick = 0;
+        loadAll(token, myId, admin);
+      }
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      clearInterval(id);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [session, profile, loadAll, loadFeed, loadUsers, loadDms, loadStories, loadMyVerification]);
+
+  // Reloj liviano: mantiene al día los textos "hace X min"
+  const [, setClockTick] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setClockTick((t) => t + 1), 15000);
     return () => clearInterval(id);
-  }, [session, profile, loadAll]);
+  }, []);
 
   const nearChatBottomRef = useRef(true);
   const prevActiveDmUserRef = useRef(undefined);
@@ -2968,7 +3016,7 @@ async function handleOpenDmImage(m) {
                   <input
                     className="rv-input"
                     type="password"
-                    placeholder="solicítalo en somosconexionsw@gmail.com"
+                    placeholder="pídeselo a quien te invitó"
                     value={codeInput}
                     onChange={(e) => setCodeInput(e.target.value)}
                     onKeyDown={(e) => {
@@ -3222,6 +3270,7 @@ async function handleOpenDmImage(m) {
                             style={imagesBlocked ? { overflow: "hidden" } : undefined}
                           >
                            <img
+                              loading={idx < 3 ? "eager" : "lazy"}
                               className={`rv-frame-img rv-protected-img ${imagesBlocked ? "rv-blurred" : ""}`}
                               src={post.image_url}
                               alt={post.caption || "foto"}
@@ -3968,6 +4017,7 @@ async function handleOpenDmImage(m) {
                             }}
                           >
                             <img
+                              loading="lazy"
                               src={p.image_url}
                               alt={p.caption || "foto"}
                               className={imagesBlocked ? "rv-blurred" : undefined}
@@ -4088,6 +4138,7 @@ async function handleOpenDmImage(m) {
                         >
                           {p.image_url ? (
                             <img
+                              loading="lazy"
                               src={p.image_url}
                               alt={p.name}
                               style={{ width: "100%", height: "100%", objectFit: "cover" }}
@@ -4224,6 +4275,7 @@ async function handleOpenDmImage(m) {
                         style={{ alignItems: "flex-start" }}
                       >
                         <img
+                          loading="lazy"
                           src={v.photo_url}
                           alt={`selfie de ${v.profile ? v.profile.username : ""}`}
                           style={{
