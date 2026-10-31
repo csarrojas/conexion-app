@@ -34,6 +34,7 @@ ${FONT_IMPORT}
   background: var(--bg);
   color: var(--ink);
   min-height: 100%;
+  min-height: 100dvh;
   width: 100%;
   box-sizing: border-box;
 }
