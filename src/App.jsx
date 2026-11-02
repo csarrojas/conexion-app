@@ -1700,7 +1700,14 @@ function Revelado() {
   const dmFileInputRef = useRef(null);
 
   const [adminActiveConvo, setAdminActiveConvo] = useState(null);
-
+// Supervisión: al abrir una conversación, el recuadro queda posicionado al final
+const scrollAdminToBottom = useCallback((el) => {
+  if (!el) return;
+  el.scrollTop = el.scrollHeight;
+  setTimeout(() => {
+    el.scrollTop = el.scrollHeight;
+  }, 300);
+}, []);
   const [products, setProducts] = useState([]);
   const [productName, setProductName] = useState("");
   const [productDescription, setProductDescription] = useState("");
@@ -4388,7 +4395,7 @@ async function handleOpenDmImage(m) {
                       </button>
                       {adminActiveConvo.split("|").join(" ↔ ")}
                     </div>
-                    <div className="rv-chat-log" style={{ maxHeight: 420 }}>
+                    <div className="rv-chat-log" ref={scrollAdminToBottom} style={{ maxHeight: 420 }}>
                       {(dms[adminActiveConvo] || []).map((m) => (
                         <div
                           className="rv-chat-msg"
