@@ -6,7 +6,7 @@ const SUPABASE_ANON_KEY =
 
 // Shared secret required to register at all. Change and share only with
 // people you invite.
-const COMMUNITY_CODE = "OCTUBRE2026";
+const COMMUNITY_CODE = "CONEXIONSW2026";
 
 // Aviso de novedad con imagen: pega aquí el enlace de la imagen subida a Storage.
 // Mientras esté vacío, el aviso no se muestra.
@@ -3024,7 +3024,7 @@ async function handleOpenDmImage(m) {
                   <input
                     className="rv-input"
                     type="password"
-                    placeholder="Código: OCTUBRE2026"
+                    placeholder="Solicítalo a somosconexionsw@gmail.com"
                     value={codeInput}
                     onChange={(e) => setCodeInput(e.target.value)}
                     onKeyDown={(e) => {
